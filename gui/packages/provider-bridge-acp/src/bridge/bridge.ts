@@ -26,6 +26,7 @@ import {
   decodeBridgeJsonRpcResponse,
   decodeToolCallResponsePayload,
   experimental_defineProviderBridge,
+  findCliExecutable,
   mimeTypeFromExtension,
   runBridgeRequest,
   withoutBridgeRuntimeEnv,
@@ -2510,7 +2511,11 @@ function decodeLaunchSpec(
   const launchSpec = acpLaunchSpecSchema.safeParse(
     providerOptions?.["acpLaunchSpec"],
   );
-  return launchSpec.success ? launchSpec.data : null;
+  if (!launchSpec.success) return null;
+  const { command } = launchSpec.data;
+  return command.includes("/")
+    ? launchSpec.data
+    : { ...launchSpec.data, command: findCliExecutable(command) ?? command };
 }
 
 const acpProviderOptionsSchema = z

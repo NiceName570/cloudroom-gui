@@ -12,11 +12,11 @@ import { binding, command, queuedPrompts, saveBinding, saveCommandState, saveSta
 const object = z.record(z.string(), z.unknown());
 const nativeFrame = z.object({ method: z.string(), params: object.optional() });
 // GUI provider ID → cloud core harness ID.
-export const CLOUD_HARNESSES = { codex: "codex", pi: "pi", "claude-code": "claude-code", "acp-cursor": "cursor", "acp-fx": "fx", "acp-opencode": "opencode" } as const;
+export const CLOUD_HARNESSES = { codex: "codex", pi: "pi", "claude-code": "claude-code", "acp-cursor": "cursor", "acp-fx": "fx", "acp-opencode": "opencode", "acp-hermes-agent": "hermes" } as const;
 export type CloudProvider = keyof typeof CLOUD_HARNESSES;
 export const isCloudProvider = (id: string | undefined): id is CloudProvider => id !== undefined && Object.hasOwn(CLOUD_HARNESSES, id);
-export const HARNESS_NAMES: Record<CloudProvider, string> = { codex: "Codex", pi: "Pi", "claude-code": "Claude Code", "acp-cursor": "Cursor", "acp-fx": "fx", "acp-opencode": "opencode" };
-const isAcpProvider = (id: string | undefined): id is "acp-cursor" | "acp-fx" | "acp-opencode" => id === "acp-cursor" || id === "acp-fx" || id === "acp-opencode";
+export const HARNESS_NAMES: Record<CloudProvider, string> = { codex: "Codex", pi: "Pi", "claude-code": "Claude Code", "acp-cursor": "Cursor", "acp-fx": "fx", "acp-opencode": "opencode", "acp-hermes-agent": "Hermes Agent" };
+const isAcpProvider = (id: string | undefined): id is "acp-cursor" | "acp-fx" | "acp-opencode" | "acp-hermes-agent" => id === "acp-cursor" || id === "acp-fx" || id === "acp-opencode" || id === "acp-hermes-agent";
 const FINISHED = ["completed", "failed", "interrupted", "unknown", "unknown_after_restart"];
 const turnStatus = (state: string): ThreadEventTurnStatus => state === "completed" ? "completed" : state === "interrupted" ? "interrupted" : "failed";
 export function endedTurn(record: SessionRecord): ThreadEventTurnStatus | null {
@@ -50,12 +50,28 @@ function turnStarted(db: DbQueryConnection, threadId: string, turnId: string): b
   return Boolean(db.select({ id: events.id }).from(events).where(and(eq(events.threadId, threadId), eq(events.turnId, turnId), eq(events.type, "turn/started"))).get());
 }
 
+const CHILD_NOTICE = /^\[Cloudroom\] Child thread (?:"(.*)" \((\S+)\)|(\S+)) (completed:|was interrupted\.|failed or)/;
+
+function childNotice(db: DbQueryConnection, saved: Binding, request: Command, text: unknown) {
+  const match = request.id.startsWith("notice_") && typeof text === "string" ? CHILD_NOTICE.exec(text) : null;
+  if (!match) return { initiator: "user" };
+  const [, title, titledId, untitledId, state] = match;
+  const sessionId = (titledId ?? untitledId)!;
+  const child = db.select({ threadId: cloudroomThreads.threadId }).from(cloudroomThreads)
+    .where(and(eq(cloudroomThreads.coreUrl, saved.coreUrl), eq(cloudroomThreads.sessionId, sessionId))).get();
+  return {
+    initiator: "system",
+    systemMessageKind: state === "completed:" ? "child-completed" : state === "failed or" ? "child-failed" : "child-interrupted",
+    systemMessageSubject: child ? { kind: "thread", threadId: child.threadId, threadName: title ?? (getThread(db, child.threadId)?.title || sessionId) } : null,
+  };
+}
+
 function promptRequestedEvent(db: DbQueryConnection, saved: Binding, request: Command, steeredTurnId?: string): ThreadEvent {
   const stored = effectivePrompt(db, saved.threadId, request.id);
   const initial = request.id === `first_${saved.threadId}`;
   return threadEventSchema.parse({
     type: "client/turn/requested", scope: threadScope(), threadId: saved.threadId,
-    direction: "outbound", requestId: bbRequestId(request.id), source: initial ? "spawn" : "tell", initiator: "user", senderThreadId: null,
+    direction: "outbound", requestId: bbRequestId(request.id), source: initial ? "spawn" : "tell", ...childNotice(db, saved, request, stored.text), senderThreadId: null,
     input: Array.isArray(stored.content) ? stored.content : [{ type: "text", text: stored.text ?? "", mentions: [] }],
     target: steeredTurnId ? { kind: "steer", expectedTurnId: steeredTurnId } : { kind: initial ? "thread-start" : "new-turn" },
     request: { method: initial ? "thread/start" : "turn/start", params: {} },

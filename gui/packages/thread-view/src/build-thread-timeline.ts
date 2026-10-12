@@ -1153,6 +1153,35 @@ function buildTurnSummaryRow({
   };
 }
 
+function withFlatTurnDurationRow(
+  rows: TimelineRow[],
+  rowIdPrefix: string,
+  turn: EventProjectionTurn,
+): TimelineRow[] {
+  const index = rows.findIndex(
+    (row) => !(row.kind === "conversation" && row.role === "user"),
+  );
+  const firstWorkRow = rows[index];
+  if (firstWorkRow === undefined) {
+    return rows;
+  }
+  const durationRow: TimelineTurnRow = {
+    id: `${rowIdPrefix}${turn.threadId}:${turn.turnId}:turn`,
+    threadId: turn.threadId,
+    turnId: turn.turnId,
+    sourceSeqStart: firstWorkRow.sourceSeqStart,
+    sourceSeqEnd: turn.sourceSeqEnd,
+    startedAt: turn.startedAt,
+    createdAt: firstWorkRow.createdAt,
+    kind: "turn",
+    status: turn.status,
+    summaryCount: 0,
+    completedAt: turn.completedAt,
+    children: null,
+  };
+  return [...rows.slice(0, index), durationRow, ...rows.slice(index)];
+}
+
 function buildCompletedTurnSummaryRows({
   completedTurnDisplay,
   includeNestedRows,
@@ -1214,8 +1243,15 @@ function buildTurnRows({
     workspaceRoot,
   };
 
-  if (!isCompletedTurn || completedTurnDisplay === "flat") {
+  if (!isCompletedTurn) {
     return messages.flatMap((message) => convertMessage(message, rowOptions));
+  }
+  if (completedTurnDisplay === "flat") {
+    return withFlatTurnDurationRow(
+      messages.flatMap((message) => convertMessage(message, rowOptions)),
+      rowIdPrefix,
+      turn,
+    );
   }
 
   const { summaryItems, terminalMessages, trailingMessages } =
@@ -1250,6 +1286,12 @@ function findMatchingTurnSummaryRow(
         row.sourceSeqStart === range.sourceSeqStart &&
         row.sourceSeqEnd === range.sourceSeqEnd,
     ) ?? null
+  );
+}
+
+function isFlatTurnDurationRow(row: TimelineRow): boolean {
+  return (
+    row.kind === "turn" && row.summaryCount === 0 && row.children === null
   );
 }
 
@@ -1431,7 +1473,7 @@ export function buildThreadTimelineTurnDetailsFromEvents(
     includeNestedRows: true,
     rowIdPrefix: ROOT_TIMELINE_ROW_ID_PREFIX,
     workspaceRoot: args.options.workspaceRoot,
-  });
+  }).filter((row) => !isFlatTurnDurationRow(row));
   const matchingTurnSummary = findMatchingTurnSummaryRow(
     nestedRows,
     args.options,

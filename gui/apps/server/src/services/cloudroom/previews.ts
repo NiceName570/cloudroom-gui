@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { z } from "zod";
@@ -12,6 +12,18 @@ export type MacAccessLevel = typeof macAccessLevels[number];
 
 type Deps = Pick<AppDeps, "config">;
 const folder = (deps: Deps) => join(deps.config.dataDir, "cloudroom-preview");
+// Cloudroom Dev shares the real app's account, so its helper uses only the sandboxes of threads Dev woke.
+const devBuild = (deps: Deps) => deps.config.appVersion.startsWith("0.0.0");
+const noted = new Set<string>();
+
+/** After a wake the helper lists the new sandbox now instead of at its next minute check. */
+export async function noteWake(deps: Deps, thread: string): Promise<void> {
+  if (devBuild(deps) && !noted.has(thread)) {
+    await appendFile(join(folder(deps), "own-threads"), thread + "\n", { mode: 0o600 });
+    noted.add(thread);
+  }
+  await writeFile(join(folder(deps), "woke"), "");
+}
 const statusSchema = z.object({ state: z.enum(["connected", "offline"]), count: z.number().int().nonnegative().optional(), message: z.string().max(512).optional(), checkedAt: z.number() });
 
 export async function previewStatus(deps: Deps) {
@@ -42,7 +54,7 @@ export async function setupPreviews(deps: Deps): Promise<void> {
   const launcher = process.platform === "darwin" && process.versions.electron ? ["--launcher", process.execPath] : [];
   const restart = restartedThisLaunch ? [] : ["--restart"];
   try {
-    await promisify(execFile)(CLOUDROOM_PYTHON_PATH, ["-B", "-E", "-s", CLOUDROOM_PREVIEW_SCRIPT_PATH, "configure", folder(deps), "--connection", join(deps.config.dataDir, "cloudroom.json"), "--mac-access", await macAccess(deps) ?? "off", ...launcher, ...restart], { timeout: 30_000, maxBuffer: 64 * 1024 });
+    await promisify(execFile)(CLOUDROOM_PYTHON_PATH, ["-B", "-E", "-s", CLOUDROOM_PREVIEW_SCRIPT_PATH, "configure", folder(deps), "--connection", join(deps.config.dataDir, "cloudroom.json"), "--mac-access", await macAccess(deps) ?? "off", ...launcher, ...restart, ...(devBuild(deps) ? ["--own-threads"] : [])], { timeout: 30_000, maxBuffer: 64 * 1024 });
     restartedThisLaunch = true;
   } catch { throw new ApiError(503, "cloudroom_preview_setup", "Cloud previews could not start. Inspect the private preview helper status. Cloud sessions are unaffected."); }
 }

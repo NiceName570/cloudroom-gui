@@ -281,7 +281,7 @@ By project (`project`) is the default for `sidebar.organizationMode` when no
 value is saved. Existing server and legacy browser choices are preserved.
 
 Every thread-list header's actions menu offers New project, New section,
-Organize, and Sort by. Organize selects By project, By machine, or Custom for the whole sidebar.
+Organize, and Sort by. Organize selects By project, By machine, By harness, or Custom for the whole sidebar.
 Sort by applies only to that section (saved in `sidebar.sectionSorts`); selecting
 the same field again reverses its direction. Pinned also offers Drag order.
 `sidebar.sortDirection` accepts `ascending`, `descending`, or `default`.

@@ -117,21 +117,12 @@ export function AppSidebar({
     setThreadShortcutKeysById(EMPTY_SIDEBAR_THREAD_SHORTCUT_KEYS);
   }, []);
 
-  const activateThreadShortcut = useCallback((index: number): boolean => {
-    const targets = threadShortcutTargetsRef.current;
-    const target =
-      targets[index] ??
-      getSidebarThreadShortcutTargets(sidebarRef.current)[index];
-    if (!target?.element) return false;
-    target.element.click();
-    return true;
-  }, []);
-
   const openNavigationTarget = useCallback(
     (target: SidebarThreadShortcutTarget | undefined): boolean => {
       if (!target) return false;
       if (target.element) {
         target.element.click();
+        revealSidebarThread(sidebarRef.current, target.threadId);
         return true;
       }
       if (!target.projectId) return false;
@@ -142,9 +133,20 @@ export function AppSidebar({
           threadId: target.threadId,
         }),
       );
+      revealSidebarThread(sidebarRef.current, target.threadId);
       return true;
     },
     [closeOnMobile, navigate],
+  );
+
+  const activateThreadShortcut = useCallback(
+    (index: number): boolean => {
+      const target =
+        threadShortcutTargetsRef.current[index] ??
+        getSidebarThreadShortcutTargets(sidebarRef.current)[index];
+      return target?.element ? openNavigationTarget(target) : false;
+    },
+    [openNavigationTarget],
   );
 
   const activateAdjacentThread = useCallback(

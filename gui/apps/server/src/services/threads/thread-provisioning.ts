@@ -27,6 +27,7 @@ import {
   requestThreadStart,
 } from "./thread-lifecycle.js";
 import { resolvePermissionEscalation } from "./thread-runtime-config.js";
+import { pendingImportFork } from "./thread-fork-history.js";
 import {
   createThreadStartup,
   type ThreadForkDescriptor,
@@ -56,6 +57,7 @@ interface RequestThreadProvisionArgs {
   fork: ThreadForkDescriptor | null;
   input: PromptInput[];
   providerInput?: PromptInput[];
+  seedWithoutRun?: boolean;
   startedOnBehalfOf: StartedOnBehalfOf | null;
   thread: Thread;
   titleProvided: boolean;
@@ -200,7 +202,8 @@ async function startThreadIfEnvironmentReady(
       path: args.environment.path,
       status: args.environment.status,
     },
-    fork: args.context.request.fork,
+    fork:
+      args.context.request.fork ?? pendingImportFork(deps.db, args.thread.id),
     input: args.context.request.input,
     ...(args.context.request.inputGroups !== undefined
       ? { inputGroups: args.context.request.inputGroups }
@@ -257,7 +260,9 @@ export function requestThreadProvision(
       ...args,
       clientRequestId: request.requestId,
       input: args.providerInput ?? args.input,
-      seedWithoutRun: args.startedOnBehalfOf !== null,
+      seedWithoutRun:
+        args.seedWithoutRun === true ||
+        (args.startedOnBehalfOf !== null && args.thread.originKind !== null),
     });
     saveThreadProvisionContext({
       replace: true,

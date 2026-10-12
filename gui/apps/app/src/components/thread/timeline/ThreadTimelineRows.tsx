@@ -1011,6 +1011,7 @@ const ConversationRowContent = memo(function ConversationRowContent({
     return (
       <ConversationMessageContent
         attachments={row.attachments}
+        createdAt={row.createdAt}
         originKind={originKind}
         initiator={row.initiator}
         mentions={row.mentions}
@@ -1067,6 +1068,7 @@ const ConversationRowContent = memo(function ConversationRowContent({
   return (
     <ConversationMessageContent
       attachments={row.attachments}
+      createdAt={row.createdAt}
       id={row.id}
       onAddToChat={addMessageToChatHandler(
         onMessageAddToChat,

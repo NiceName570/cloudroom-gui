@@ -23,6 +23,7 @@ import {
   getLastExecutionOptions,
   getLastProviderThreadId,
 } from "../threads/thread-events.js";
+import { pendingImportFork } from "../threads/thread-fork-history.js";
 import { stopThreadForCurrentState } from "../threads/thread-lifecycle.js";
 import { resolveThreadRuntimeCommandConfig } from "../threads/thread-runtime-config.js";
 import { cloudroomSystemPrompt } from "../threads/custom-instructions.js";
@@ -271,6 +272,12 @@ class Teleport {
         ? getEnvironment(this.deps.db, source.environmentId)
         : null;
       const nativeId = getLastProviderThreadId(this.deps, source.id);
+      if (!nativeId && pendingImportFork(this.deps.db, source.id))
+        throw new ApiError(
+          409,
+          "teleport_unavailable",
+          `Send ${source.title ?? "this imported chat"} a message first, then Teleport.`,
+        );
       if (
         !env ||
         env.hostId !== environment.hostId ||

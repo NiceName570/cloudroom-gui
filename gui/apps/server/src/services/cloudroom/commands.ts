@@ -26,7 +26,7 @@ import { assertValidParentThread, isParentNotifiableChildThread } from "../threa
 import { inferThreadMetadata, queueThreadTitle } from "../threads/thread-metadata-inference.js";
 import { cliPlace, reportAgentConnect } from "./setup-telemetry.js";
 import { cloudSkills, copyLogins, copyMacGithub, importCodexLogin, importPiLogin, setupSync, skillInCloud, stopSync, syncStatus } from "./sync.js";
-import { setupPreviews, stopPreviews, previewStatus } from "./previews.js";
+import { noteWake, setupPreviews, stopPreviews, previewStatus } from "./previews.js";
 import { CloudSecrets } from "./secrets.js";
 import { cancelMacCodexLogin, hasMacCodexLogin, macCodexLogin, macCodexLoginExpired, macCursorLogin, revokeDesktopToken, startMacCodexLogin, SANDBOX_PREFIX, SandboxAsleep, SandboxDirectory, sandboxThread, type SandboxProject, type SandboxTrigger, type SandboxWakeTrigger } from "./sandboxes.js";
 import type { AppDeps, LoggedWorkSessionDeps } from "../../types.js";
@@ -150,8 +150,9 @@ export function requireNativeThread(thread: Pick<Thread, "executionTarget">): vo
 }
 
 type PromptAttachment = { name: string; kind: "image" | "file"; localPath: string; id?: string; path?: string };
-/** Runs when a project copy ends, with the client that ran it: a sandbox that slept mid-copy has a new address. */
-type Landed = (error?: string, client?: CloudroomClient) => void;
+/** Runs when a project copy ends, with the client that ran it: a sandbox that slept mid-copy has a new address.
+ *  `partial` says why only `.env` files arrived. */
+type Landed = (error?: string, client?: CloudroomClient, partial?: string) => void;
 
 function cloudTextContent(content: unknown): unknown {
   return Array.isArray(content) ? content.filter(part => part?.type === "text") : content;
@@ -234,7 +235,7 @@ function followUpPayload(harness: string, saved: Binding, payload: SendMessageRe
 
 function validateFollowUpReasoning(harness: string, saved: Binding, reasoning: string, capabilities: Capabilities): void {
   if (reasoning === saved.reasoning) return;
-  if (harness === "acp-cursor" || harness === "acp-fx" || harness === "acp-opencode") throw new ApiError(409, "cloudroom_launch_settings", `${HARNESS_NAMES[harness]} reasoning is fixed for this cloud session. Start a new thread to change it.`);
+  if (harness === "acp-cursor" || harness === "acp-fx" || harness === "acp-opencode" || harness === "acp-hermes-agent") throw new ApiError(409, "cloudroom_launch_settings", `${HARNESS_NAMES[harness]} reasoning is fixed for this cloud session. Start a new thread to change it.`);
   if (harness !== "codex" && harness !== "pi" && harness !== "claude-code") throw new ApiError(400, "cloudroom_harness", "Unsupported cloud harness.");
   if (!capabilities.prompt_reasoning) throw new ApiError(409, "cloudroom_update", "Update the cloud core before changing reasoning on a follow-up.");
   validateReasoning(harness, coreModel(harness, saved.model, capabilities).model, reasoning, capabilities);
@@ -380,7 +381,7 @@ class CloudroomService {
     this.sandboxes = new SandboxDirectory(async () => {
       const saved = await this.savedConnection();
       return saved?.sandboxToken && saved.account ? { website: saved.websiteUrl ?? "https://www.cloudroom.dev", userId: saved.account.id, token: saved.sandboxToken } : null;
-    }, () => void writeFile(join(deps.config.dataDir, "cloudroom-preview", "woke"), "").catch(() => {}));
+    }, thread => void noteWake(deps, thread).catch(() => {}));
     // Renames, generated titles, and agent renames all reach the website. Read after the change's transaction ends.
     deps.hub.onThreadChanged((threadId, changes) => { if (changes.includes("title-changed")) setImmediate(() => this.syncLabel(threadId)); });
   }
@@ -1029,7 +1030,7 @@ class CloudroomService {
     const project = getProject(this.deps.db, request.projectId);
     if (!project) throw new ApiError(404, "project_not_found", "Project not found");
     if (!isCloudProvider(request.providerId) || request.originKind || request.sourceThreadId || request.sendAt || request.pluginSubmission || request.environment.type !== "project-default")
-      throw new ApiError(400, "cloudroom_unsupported", "Cloud supports new Codex, Pi, fx, opencode and Claude Code threads in a cloud folder. Forks, scheduling and native machine targets are not supported.");
+      throw new ApiError(400, "cloudroom_unsupported", "Cloud supports new Codex, Pi, fx, opencode, Hermes Agent and Claude Code threads in a cloud folder. Forks, scheduling and native machine targets are not supported.");
     if (request.providerId === "acp-cursor") throw new ApiError(400, "cloudroom_unsupported", "Cursor isn't available in Cloud. Use Codex or Claude Code.");
     if (request.permissionMode && request.permissionMode !== "full") throw new ApiError(400, "cloudroom_unsupported", "Cloud uses the full permission mode; restricted modes are not supported.");
     if (request.startedOnBehalfOf || request.sourceSeqEnd !== undefined) throw new ApiError(400, "cloudroom_unsupported", "Cloud continuation and delegated starts are not enabled.");
@@ -1212,7 +1213,7 @@ class CloudroomService {
     if (!parent?.sessionId || !parentThread || parentThread.archivedAt || parentThread.deletedAt) throw new ApiError(409, "cloudroom_parent_unavailable", "The parent Cloud thread is archived or has not started yet.");
     if (request.projectId !== parentThread.projectId) throw new ApiError(400, "cloudroom_unsupported", "A child thread belongs to its parent's project.");
     const providerId = request.providerId ?? parentThread.providerId;
-    if (!isCloudProvider(providerId) || providerId === "acp-cursor" || providerId === "acp-fx") throw new ApiError(400, "cloudroom_unsupported", "Cloud child threads use Codex, Claude Code, Pi or OpenCode.");
+    if (!isCloudProvider(providerId) || providerId === "acp-cursor" || providerId === "acp-fx") throw new ApiError(400, "cloudroom_unsupported", "Cloud child threads use Codex, Claude Code, Pi, OpenCode or Hermes Agent.");
     if (request.sendAt || request.pluginSubmission) throw new ApiError(400, "cloudroom_unsupported", "Cloud child threads can't be scheduled.");
     if (request.baseBranch) throw new ApiError(400, "cloudroom_unsupported", "A Cloud parent's child works in the parent's folder and branch, so a base branch doesn't apply.");
     const { text } = promptPayload(request.input, providerId, false);
@@ -1358,11 +1359,22 @@ class CloudroomService {
       // Archive always wins (ADR 0112): the website stops the sandbox even mid-task, once no other thread runs in it.
       this.detach(threadId);
       if (!coreInUse(this.deps.db, saved.coreUrl)) void this.sandboxes.archive(sandbox).catch(error => this.warn("The thread's sandbox could not be archived; it sleeps on its own", error, { threadId }));
+      // Cloud automations (ADR 0212) stop prompting it. A child shares its parent's sandbox, which stays open.
+      if (saved.sessionId) void this.sandboxes.automations({ action: "archived", thread: sandbox, session: saved.sessionId }).catch(error => this.warn("The thread's cloud automations could not be paused", error, { threadId }));
       return;
     }
     this.enqueue(threadId, randomUUID(), "stop", {});
     this.enqueue(threadId, randomUUID(), "sleep", {});
     void this.deliver(threadId).catch(() => {});
+  }
+
+  /** Delete: the website erases the thread's own sandbox, snapshots, saved copy, and chat history. Children share it. */
+  remove(threadId: string): void {
+    const saved = binding(this.deps.db, threadId);
+    if (!saved) return;
+    this.detach(threadId);
+    const sandbox = sandboxThread(saved.coreUrl);
+    if (sandbox === threadId) void this.sandboxes.remove(sandbox).catch(error => this.warn("The thread's sandbox could not be deleted; it sleeps on its own", error, { threadId }));
   }
 
   /** Each sandbox works on its own branch, named after the thread: room/<name>-<id> (docs/scopes/sandboxes.md).
@@ -1788,20 +1800,21 @@ class CloudroomService {
         // `cloudroom files wait` holds the agent until the files, and a fork's code, have landed (ADR 0209).
         const workspace = options.workspace && options.workspace !== ROOT_WORKSPACE && (files.length || started.code) ? options.workspace : null;
         const marked = workspace ? firstSent.then(() => this.filesState(client, threadId, workspace, "copying")) : null;
-        const landed: Landed = (error, current = client) => {
+        const landed: Landed = (error, current = client, partial) => {
           if (files.length) this.progress(threadId, [{ key: "files", status: error ? "failed" : "completed" }]);
           const finish = (failure?: string | null) => {
             if (marked && workspace) void marked.then(() => this.filesState(current, threadId, workspace, failure ? `failed: ${failure}` : "ready"));
           };
+          const missing = error ?? partial;
           if (!started.code) {
             void this.ensureBranch(threadId, true);
-            finish(error);
+            finish(missing);
             return;
           }
           // A fork's branch then moves to its source's code, so the agent sees what the source saw.
           void this.ensureBranch(threadId, true).then(() => landForkCode(client, started)).then((failure) => {
             this.progress(threadId, [{ key: "fork", status: failure ? "failed" : "completed" }]);
-            finish(failure ?? error);
+            finish(failure ?? missing);
           });
         };
         if (copy) this.copy(client, copy, landed, firstSent);
@@ -2083,7 +2096,7 @@ class CloudroomService {
   /** Copies a new thread's project. If its sandbox sleeps or drops mid-copy (say, the usage cap paused it), the copy waits
    *  and restarts on the thread's next connection, up to 3 times, instead of failing. */
   private copy(client: CloudroomClient, job: ProjectCopyJob, landed: Landed, after?: Promise<void>, tries = 0): void {
-    copyProject(this.deps, client, job, error => landed(error, client), after, tries < 3 ? () => {
+    copyProject(this.deps, client, job, (error, partial) => landed(error, client, partial), after, tries < 3 ? () => {
       this.pausedCopies.set(job.threadId, { job, landed, tries: tries + 1 });
       // Reconnecting finds the sandbox's new address, or that it sleeps; the copy resumes once a stream connects.
       this.detach(job.threadId);
@@ -2103,8 +2116,8 @@ class CloudroomService {
     // A folder that already has files gets only its `.env` files again, so a copy cut short stays failed, never ready.
     const full = job.clone || job.copyAll;
     const marked = full ? this.filesState(client, threadId, workspace, "copying") : Promise.resolve();
-    this.copy(client, job, (error, current = client) => void marked.then(() => this.filesState(current, threadId, workspace,
-      error ? `failed: ${error}` : full ? "ready" : "failed: The project copy was cut short, so some files may be missing.", !full)));
+    this.copy(client, job, (error, current = client, partial) => void marked.then(() => this.filesState(current, threadId, workspace,
+      error ?? partial ? `failed: ${error ?? partial}` : full ? "ready" : "failed: The project copy was cut short, so some files may be missing.", !full)));
   }
 
   private filesState(client: CloudroomClient, threadId: string, workspace: string, state: string, onlyIfCopying = false): Promise<void> {

@@ -139,6 +139,39 @@ const SYSTEM_ROWS: readonly SystemRowFixture[] = [
     text: "Stopped manually before the review step.",
   },
   {
+    label: "Cloud child-completed",
+    hint: "Core's notice text; only the child's reply shows",
+    systemMessageKind: "child-completed",
+    systemMessageSubject: {
+      kind: "thread",
+      threadId: "thr_child4",
+      threadName: "Add init skill and git policy",
+    },
+    text: '[Cloudroom] Child thread "Add init skill and git policy" (cr_child_279f) completed:\n\nAll of A–F is done. `bash tests/_chain/check.sh` passes with 53 PASS and 0 FAIL.\n\n- my-skill-init: new in both variants\n- git policy: updated orchestrate rule 10',
+  },
+  {
+    label: "Cloud child-failed",
+    hint: "Core's notice text; only the cause shows",
+    systemMessageKind: "child-failed",
+    systemMessageSubject: {
+      kind: "thread",
+      threadId: "thr_child5",
+      threadName: "Clean up old docs",
+    },
+    text: "[Cloudroom] Child thread \"Clean up old docs\" (cr_child_9f2a) failed or its outcome is uncertain. Cause: process exited with signal 9. Signal 9 usually means the sandbox ran out of memory. Its turn did not finish; resend the task if it still matters. Check it with `cloudroom thread output cr_child_9f2a` before deciding next steps.",
+  },
+  {
+    label: "Cloud child-interrupted",
+    hint: "Core's notice text; title only",
+    systemMessageKind: "child-interrupted",
+    systemMessageSubject: {
+      kind: "thread",
+      threadId: "thr_child6",
+      threadName: "Research: Cursor",
+    },
+    text: '[Cloudroom] Child thread "Research: Cursor" (cr_child_77b1) was interrupted. If the user stopped it, do not restart or replace its work unless they ask.',
+  },
+  {
     label: "child-outcome-batch",
     hint: "multiple children, mixed statuses — count in the title, detail in the body",
     systemMessageKind: "child-outcome-batch",
@@ -151,7 +184,7 @@ export function Overview() {
   return (
     <StoryCard>
       {SYSTEM_ROWS.map((row) => (
-        <StoryRow key={row.systemMessageKind} label={row.label} hint={row.hint}>
+        <StoryRow key={row.label} label={row.label} hint={row.hint}>
           <TimelineStage>
             <ConversationMessageContent
               role="user"

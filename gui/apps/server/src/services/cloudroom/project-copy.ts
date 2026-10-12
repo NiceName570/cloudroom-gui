@@ -81,8 +81,9 @@ export async function planProjectCopy(deps: Deps, client: CloudroomClient, threa
 }
 
 /** The copy shows as started at once, but its transfer waits for `after`, so it can't crowd out the first message on a slow connection.
- *  With `paused`, a copy cut off by a sleeping or unreachable sandbox waits instead of failing; the caller restarts it. */
-export function copyProject(deps: Deps, client: CloudroomClient, job: ProjectCopyJob, done?: (error?: string) => void, after: Promise<void> = Promise.resolve(), paused?: () => void): void {
+ *  With `paused`, a copy cut off by a sleeping or unreachable sandbox waits instead of failing; the caller restarts it.
+ *  `partial` says why only `.env` files arrived; the agent is told, not the user. */
+export function copyProject(deps: Deps, client: CloudroomClient, job: ProjectCopyJob, done?: (error?: string, partial?: string) => void, after: Promise<void> = Promise.resolve(), paused?: () => void): void {
   if (copying.has(job.key)) return;
   copying.add(job.key);
   const report = (progress: ProjectCopyProgress) => {
@@ -94,7 +95,11 @@ export function copyProject(deps: Deps, client: CloudroomClient, job: ProjectCop
   };
   report({ phase: job.clone ? "cloning" : "uploading", completed: 0, total: 0 });
   void after.then(() => run(client, job, report))
-    .then(() => { report({ phase: "complete", completed: 0, total: 0 }); done?.(); })
+    .then(async (partial) => {
+      if (partial) await writeFailureNote(client, job, partial).catch(() => {});
+      report({ phase: "complete", completed: 0, total: 0 });
+      done?.(undefined, partial);
+    })
     .catch(async (error: unknown) => {
       if (paused && error instanceof CloudroomError && error.retryable) {
         report({ phase: "waiting", completed: 0, total: 0 });
@@ -109,7 +114,7 @@ export function copyProject(deps: Deps, client: CloudroomClient, job: ProjectCop
     .finally(() => copying.delete(job.key));
 }
 
-async function run(client: CloudroomClient, job: ProjectCopyJob, report: (progress: ProjectCopyProgress) => void): Promise<void> {
+async function run(client: CloudroomClient, job: ProjectCopyJob, report: (progress: ProjectCopyProgress) => void): Promise<string | undefined> {
   const target = (await client.workspace(job.workspace))?.path;
   if (!target) throw new Error("The cloud project folder is unavailable.");
   // A retry clears the last failure's note, so the agent doesn't stop waiting for files that are on their way.
@@ -125,11 +130,20 @@ async function run(client: CloudroomClient, job: ProjectCopyJob, report: (progre
   if (!cloned) report({ phase: "uploading", completed: 0, total: 0 });
   // A failed clone of a small project falls back to uploading it, like a project not on GitHub.
   const scope = job.teleport ? (cloned ? "changed" : "all") : job.copyAll || (cloneError && job.localPath && await smallProject(job.localPath)) ? "all" : "env";
+  let partial: string | undefined;
   if (job.localPath) {
-    const files = await localFiles(job.localPath, scope);
-    if (files.length) await upload(client, job.localPath, target, files, scope !== "changed", report);
+    const folder = await mkdtemp(join(tmpdir(), "cloudroom-copy-"));
+    const archive = join(folder, "project.tgz");
+    try {
+      const packed = await packProject(job.localPath, scope, archive);
+      partial = packed.partial;
+      if (packed.files) await send(client, archive, target, scope !== "changed", report);
+    } finally {
+      await rm(folder, { recursive: true, force: true });
+    }
   }
-  if (cloneError) throw new Error(`The GitHub clone failed${scope === "all" ? ", so your files were copied without Git history" : ""}. Check that the project's GitHub remote exists and you can access it: ${cloneError}`);
+  if (cloneError) throw new Error(`The GitHub clone failed${scope === "all" && !partial ? ", so your files were copied without Git history" : ""}. Check that the project's GitHub remote exists and you can access it: ${cloneError}`);
+  return partial;
 }
 
 /** Tells the agent why its project folder is empty or incomplete, since it otherwise waits for files that never come. */
@@ -213,15 +227,16 @@ async function localFiles(root: string, scope: "all" | "changed" | "env", limit 
     const info = await lstat(join(root, path)).catch(() => null);
     if (!info || !(info.isFile() || info.isSymbolicLink()) || info.size > MAX_FILE) continue;
     total += info.size;
-    if (total > limit) throw new Error("This project is over 1 GB without ignored and large files, so it was not copied. Push it to GitHub to use it in Cloud.");
+    if (total > limit) throw new Error("This project is over 1 GB without ignored and large files.");
     files.push(path);
   }
   return files;
 }
 
-// A generator, so a size check can stop early in a huge folder.
+// A generator, so a size check can stop early in a huge folder. An unreadable subfolder is skipped, not fatal.
 async function* walk(root: string, folder: string): AsyncGenerator<string> {
-  for (const entry of await readdir(join(root, folder), { withFileTypes: true })) {
+  const entries = await readdir(join(root, folder), { withFileTypes: true }).catch((error: unknown) => { if (!folder) throw error; return []; });
+  for (const entry of entries) {
     if (SKIPPED.has(entry.name)) continue;
     const path = folder ? `${folder}/${entry.name}` : entry.name;
     if (entry.isDirectory()) yield* walk(root, path);
@@ -229,16 +244,35 @@ async function* walk(root: string, folder: string): AsyncGenerator<string> {
   }
 }
 
-async function upload(client: CloudroomClient, root: string, target: string, files: string[], keepExisting: boolean, report: (progress: ProjectCopyProgress) => void): Promise<void> {
-  const folder = await mkdtemp(join(tmpdir(), "cloudroom-copy-"));
-  const archive = join(folder, "project.tgz");
+/** Lists and packs the files on the Mac. A full copy that fails here for any reason (too large, cloud-only Dropbox or
+ *  iCloud files, unreadable files) packs only the `.env` files instead and says why. Clones and uncommitted edits never fall back. */
+async function packProject(root: string, scope: "all" | "changed" | "env", archive: string): Promise<{ files: number; partial?: string }> {
+  try {
+    const files = await localFiles(root, scope);
+    if (files.length) await pack(root, files, archive);
+    return { files: files.length };
+  } catch (error) {
+    if (scope !== "all") throw error;
+    const files = await localFiles(root, "env").catch(() => { throw error; });
+    if (files.length) await pack(root, files, archive).catch(() => { throw error; });
+    const reason = error instanceof Error ? error.message : String(error);
+    return { files: files.length, partial: `Only the \`.env\` files were copied, because the Mac could not pack the rest: ${reason}`.slice(0, 500) };
+  }
+}
+
+async function pack(root: string, files: string[], archive: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let stderr = "";
+    const tar = spawn("tar", ["--no-xattrs", "-czf", archive, "--null", "-T", "-"], { cwd: root, env: { ...process.env, COPYFILE_DISABLE: "1" }, stdio: ["pipe", "ignore", "pipe"] });
+    tar.stderr.on("data", (chunk: Buffer) => { stderr = (stderr + chunk.toString()).slice(-300); });
+    tar.on("error", reject).on("close", (code) => code === 0 ? resolve() : reject(new Error(`Could not pack the project files. ${stderr.trim()}`.trim())));
+    tar.stdin.end(files.map((path) => `${path}\0`).join(""));
+  });
+}
+
+async function send(client: CloudroomClient, archive: string, target: string, keepExisting: boolean, report: (progress: ProjectCopyProgress) => void): Promise<void> {
   const remote = `.cache/cloudroom/copy-${randomUUID()}.tgz`;
   try {
-    await new Promise<void>((resolve, reject) => {
-      const tar = spawn("tar", ["--no-xattrs", "-czf", archive, "--null", "-T", "-"], { cwd: root, env: { ...process.env, COPYFILE_DISABLE: "1" }, stdio: ["pipe", "ignore", "ignore"] });
-      tar.on("error", reject).on("close", (code) => code === 0 ? resolve() : reject(new Error("Could not pack the project files.")));
-      tar.stdin.end(files.map((path) => `${path}\0`).join(""));
-    });
     const size = (await stat(archive)).size;
     // Older cores lack raw input (404) and take hex, which doubles the upload.
     const raw = await retry(() => client.runOnVm({ command: "true" }, AbortSignal.timeout(PIECE_TIMEOUT), new Uint8Array()).then(() => true, (error: unknown) => {
@@ -261,7 +295,6 @@ async function upload(client: CloudroomClient, root: string, target: string, fil
     }
     await vm(client, `mkdir -p -- ${quote(target)} && tar -xzf ${remote} -C ${quote(target)}${keepExisting ? " --skip-old-files" : ""}; code=$?; rm -f ${remote}; exit $code`);
   } finally {
-    await rm(folder, { recursive: true, force: true });
     await client.runOnVm({ command: `rm -f ${remote}`, stdin: "" }).catch(() => {});
   }
 }

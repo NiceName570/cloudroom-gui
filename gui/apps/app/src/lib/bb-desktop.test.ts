@@ -4,7 +4,7 @@ import { createBbDesktopApi } from "@/test/bb-desktop-test-utils";
 import {
   CHROME_ROW_HEIGHT_CLASS,
   MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS,
-  MACOS_TRAFFIC_LIGHT_RESERVE_OFFSET_CLASS,
+  MACOS_SIDEBAR_MIN_WIDTH,
   shouldReserveMacosTrafficLights,
 } from "./bb-desktop";
 
@@ -46,24 +46,20 @@ describe("desktop chrome geometry", () => {
     ).toBe(false);
   });
 
-  it("lands the collapsed reserve at the traffic-light-clearing target", () => {
-    const px = (className: string): number => {
-      const match = /\[(\d+)px\]/.exec(className);
+  it("clears the same window-controls width for the title and the sidebar", () => {
+    const controlsWidth = (value: string): number => {
+      const match = /calc\((\d+)px ?\/ ?var\(--bb-desktop-zoom, ?1\)/.exec(
+        value,
+      );
       if (match === null) {
-        throw new Error(`no px token in "${className}"`);
+        throw new Error(`no zoom-locked width in "${value}"`);
       }
       return Number(match[1]);
     };
 
-    const TRIGGER_OFFSET = px(MACOS_TRAFFIC_LIGHT_RESERVE_OFFSET_CLASS);
-    const TRIGGER_BUTTON = 28;
-    const TRIGGER_GAP = 8;
-    const TARGET = TRIGGER_OFFSET + TRIGGER_BUTTON + TRIGGER_GAP;
-
-    const BASE_INSET = 16;
-
-    expect(BASE_INSET + px(MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS)).toBe(
-      TARGET,
+    expect(controlsWidth(MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS)).toBe(
+      controlsWidth(MACOS_SIDEBAR_MIN_WIDTH),
     );
+    expect(MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS).toContain("-1rem)");
   });
 });

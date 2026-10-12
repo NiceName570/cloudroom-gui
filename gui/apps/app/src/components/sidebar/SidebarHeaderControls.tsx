@@ -38,6 +38,7 @@ export const SidebarHeaderActionsProvider = HeaderCreationContext.Provider;
 const SIDEBAR_ORGANIZE_OPTIONS = [
   { label: "By project", mode: "project" },
   { label: "By machine", mode: "machine" },
+  { label: "By harness", mode: "harness" },
   { label: "Custom", mode: "chronological" },
 ] as const;
 

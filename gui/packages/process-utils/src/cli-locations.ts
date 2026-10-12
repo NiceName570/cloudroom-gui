@@ -21,7 +21,7 @@ function isDanglingLink(candidate: string): boolean {
   }
 }
 
-function pathCandidates(cli: KnownCli, env: NodeJS.ProcessEnv): string[] {
+function pathCandidates(cli: string, env: NodeJS.ProcessEnv): string[] {
   return (env.PATH ?? "")
     .split(delimiter)
     .filter((dir) => isAbsolute(dir))
@@ -41,9 +41,26 @@ function codexAppBundlePaths(home: string): string[] {
   );
 }
 
-function fallbackCandidates(cli: KnownCli, env: NodeJS.ProcessEnv): string[] {
+function homeDir(env: NodeJS.ProcessEnv): string {
+  return env.HOME?.trim() || homedir();
+}
+
+/** Where OpenAI's official installer (chatgpt.com/codex/install.sh) puts Codex. */
+export function officialCodexPath(
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  return join(
+    env.CODEX_HOME?.trim() || join(homeDir(env), ".codex"),
+    "packages",
+    "standalone",
+    "current",
+    "codex",
+  );
+}
+
+function fallbackCandidates(cli: string, env: NodeJS.ProcessEnv): string[] {
   if (process.getuid?.() === 0) return [];
-  const home = env.HOME?.trim() || homedir();
+  const home = homeDir(env);
   const binDirs = [
     join(home, ".local", "bin"),
     "/opt/homebrew/bin",
@@ -55,16 +72,7 @@ function fallbackCandidates(cli: KnownCli, env: NodeJS.ProcessEnv): string[] {
   ];
   const providerPaths =
     cli === "codex"
-      ? [
-          join(
-            env.CODEX_HOME?.trim() || join(home, ".codex"),
-            "packages",
-            "standalone",
-            "current",
-            "codex",
-          ),
-          ...codexAppBundlePaths(home),
-        ]
+      ? codexAppBundlePaths(home)
       : cli === "opencode"
         ? [join(home, ".opencode", "bin", "opencode")]
         : cli === "claude"
@@ -74,13 +82,19 @@ function fallbackCandidates(cli: KnownCli, env: NodeJS.ProcessEnv): string[] {
 }
 
 export function findCliExecutable(
-  cli: KnownCli,
+  cli: string,
   env: NodeJS.ProcessEnv = process.env,
 ): string | null {
+  // OpenAI's official Codex wins over PATH: it is the one copy we can always
+  // update, however tangled the Mac's npm or Homebrew copies are.
+  const official =
+    cli === "codex" && process.getuid?.() !== 0 ? [officialCodexPath(env)] : [];
   return (
-    [...pathCandidates(cli, env), ...fallbackCandidates(cli, env)].find(
-      isExecutableFile,
-    ) ?? null
+    [
+      ...official,
+      ...pathCandidates(cli, env),
+      ...fallbackCandidates(cli, env),
+    ].find(isExecutableFile) ?? null
   );
 }
 

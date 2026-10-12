@@ -358,10 +358,19 @@ export function registerHostRoutes(
       provider: payload.provider,
       actionKind: payload.actionKind,
     });
-    const done = events.find((event) => event.type === "completed");
-    const failure = events.find((event) => event.type === "error");
+    // A second "started" means the normal command failed and the provider's fallback installer ran.
+    const done = events.filter((event) => event.type === "completed").at(-1);
+    const failure = events.filter((event) => event.type === "error").at(-1);
+    const repair =
+      events.filter((event) => event.type === "started").length > 1;
     if (payload.provider === "claude-code" || payload.provider === "codex") {
-      reportCliInstall(payload.provider === "codex" ? "codex" : "claude", "local_thread", done && "success" in done && done.success ? "ok" : "failed", Date.now() - started, failure && "message" in failure ? failure.message : null);
+      reportCliInstall(
+        payload.provider === "codex" ? "codex" : "claude",
+        repair ? "repair" : "local_thread",
+        done && "success" in done && done.success ? "ok" : "failed",
+        Date.now() - started,
+        failure && "message" in failure ? failure.message : null,
+      );
     }
     return new Response(providerCliInstallEventsToNdjson(events), {
       headers: {

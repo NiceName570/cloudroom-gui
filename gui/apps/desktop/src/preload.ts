@@ -385,6 +385,9 @@ const bbDesktopApi: BbDesktopApi = {
   getWindowState() {
     return invokeDesktopWindowState();
   },
+  getZoomFactor() {
+    return webFrame.getZoomFactor();
+  },
   installUpdate() {
     return invokeInstallUpdate();
   },

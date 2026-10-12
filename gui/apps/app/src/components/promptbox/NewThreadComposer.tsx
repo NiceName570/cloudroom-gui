@@ -1732,7 +1732,11 @@ export function NewThreadComposer({
           focusRequest={promptBoxFocusRequest}
           value={promptDraft.text}
           mentionRanges={promptDraft.mentions}
-          onChange={promptDraft.setTextAndMentions}
+          onChange={(text, mentions) => {
+            // An edit can remove what the last error was about, so the old error must not linger.
+            setComposerError(null);
+            promptDraft.setTextAndMentions(text, mentions);
+          }}
           onSubmit={() => void handleSubmit(options.blockedReason ?? null)}
           isSubmitting={isSubmitting}
           disabled={disabledReason !== null}

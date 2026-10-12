@@ -104,6 +104,7 @@ import {
 import { cancelAbandonedProviderCreations } from "./thread-environment-providers.js";
 import { emitPluginThreadDeleted } from "../plugins/plugin-thread-events.js";
 import { scheduleThreadProvisioningAdvance } from "./thread-provisioning.js";
+import { pendingImportFork } from "./thread-fork-history.js";
 import { isPreStartThreadStatus } from "./thread-status.js";
 import { settleDanglingBackgroundTasksForStoppedThreadInTransaction } from "./background-task-reconciliation.js";
 
@@ -952,7 +953,10 @@ export async function prepareReadyThreadTurnCommand(
   }
 
   return {
-    command: await buildThreadStartCommand(deps, args),
+    command: await buildThreadStartCommand(deps, {
+      ...args,
+      fork: args.fork ?? pendingImportFork(deps.db, args.thread.id),
+    }),
     mode: "thread.start",
   };
 }

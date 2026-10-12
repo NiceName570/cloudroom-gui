@@ -3,6 +3,7 @@ import { useAtom } from "jotai";
 import {
   sidebarManualSectionOrderAtom,
   sidebarMachineSectionOrderAtom,
+  sidebarHarnessSectionOrderAtom,
   sidebarSectionOrderAtom,
   type SidebarOrganizationMode,
   type SidebarSectionId,
@@ -30,6 +31,10 @@ const MODE_SECTION_ORDER_CONFIG: Record<
   machine: {
     atom: sidebarMachineSectionOrderAtom,
     legacyEntityAnchor: "machines",
+  },
+  harness: {
+    atom: sidebarHarnessSectionOrderAtom,
+    legacyEntityAnchor: "harnesses",
   },
 };
 

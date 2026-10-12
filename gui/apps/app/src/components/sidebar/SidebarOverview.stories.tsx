@@ -21,6 +21,9 @@ import {
   makeHost,
   makeProject,
   makeThreadListEntry,
+  STORY_CLAUDE_CODE_PROVIDER_ID,
+  STORY_CURSOR_PROVIDER_ID,
+  STORY_PROVIDERS_BY_ID,
 } from "../../../.ladle/story-fixtures";
 import { ProjectActionsProvider } from "@/components/project/ProjectActionsProvider";
 import { ThreadActionsProvider } from "@/components/thread/ThreadActionsProvider";
@@ -35,6 +38,7 @@ import {
 import {
   hostsQueryKey,
   sidebarNavigationQueryKey,
+  systemProvidersQueryKey,
 } from "@/hooks/queries/query-keys";
 import { StoryCard, StoryRow } from "../../../.ladle/story-card";
 import { PluginNavSidebarItems } from "@/components/plugin/PluginNavSidebarItems";
@@ -269,6 +273,25 @@ const machineSidebarNavigation = {
   })),
 } satisfies SidebarBootstrapResponse;
 
+const harnessSidebarNavigation = {
+  ...loadedSidebarNavigation,
+  personalProject: {
+    ...loadedSidebarNavigation.personalProject,
+    threads: loadedSidebarNavigation.personalProject.threads.map((thread) => ({
+      ...thread,
+      providerId: STORY_CURSOR_PROVIDER_ID,
+    })),
+  },
+  projects: loadedSidebarNavigation.projects.map((project) => ({
+    ...project,
+    threads: project.threads.map((thread, index) => ({
+      ...thread,
+      providerId:
+        index % 2 === 0 ? STORY_CLAUDE_CODE_PROVIDER_ID : thread.providerId,
+    })),
+  })),
+} satisfies SidebarBootstrapResponse;
+
 function SidebarFrame({ children, navigation }: SidebarFrameProps) {
   return (
     <ProjectActionsProvider>
@@ -322,6 +345,9 @@ function LoadedSidebar({
 
   useEffect(() => {
     queryClient.setQueryData(SIDEBAR_NAVIGATION_STORY_QUERY_KEY, navigation);
+    queryClient.setQueryData(systemProvidersQueryKey(), [
+      ...STORY_PROVIDERS_BY_ID.values(),
+    ]);
     if (hosts) {
       queryClient.setQueryData(hostsQueryKey(), hosts);
     }
@@ -559,6 +585,12 @@ export function OrganizationModes() {
           mode="machine"
           hosts={machineStoryHosts}
           navigation={emptySidebarNavigation}
+        />
+      </StoryRow>
+      <StoryRow label="By harness">
+        <OrganizationSidebar
+          mode="harness"
+          navigation={harnessSidebarNavigation}
         />
       </StoryRow>
     </StoryCard>

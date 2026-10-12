@@ -13,6 +13,7 @@ import { hasSupportedFrontmatterDelimiter } from "../skills/injected-skills.js";
 import { macClaudeSignedIn } from "./claude-token.js";
 import { CloudroomConnectionError, CloudroomError } from "./client.js";
 import { macHarnessVersions } from "./harness-versions.js";
+import { isRemoteMcp, mcpSignInKey, needsMcpSignIn, type McpSignIn, type RemoteMcpServer } from "./mcp-login.js";
 
 export const SANDBOX_PREFIX = "sandbox:";
 export const sandboxThread = (coreUrl: string) => coreUrl.startsWith(SANDBOX_PREFIX) ? coreUrl.slice(SANDBOX_PREFIX.length) : null;
@@ -30,7 +31,7 @@ export type SandboxTrigger = "app_launch" | "app_activity" | "composer" | "threa
 /** Why a sleeping thread wakes before any work is sent: the user opened it or started typing (ADR 0176). */
 export type SandboxWakeTrigger = Extract<SandboxTrigger, "thread_typing" | "thread_view">;
 /** Logins the website keeps for every sandbox of an account (ADR 0145). */
-export type SandboxLogin = "claude" | "codex" | "pi" | "github" | "cursor" | "opencode";
+export type SandboxLogin = "claude" | "codex" | "pi" | "github" | "cursor" | "opencode" | "mcp" | "hermes";
 /** GitHub projects also name their repository and cloud folder, so the website can build a template. */
 export type SandboxProject = { id: string; repository: string | null; folder: string };
 // A sleeping sandbox is only looked up again after this long; sending work wakes it at once.
@@ -56,6 +57,16 @@ function claudeVariables(value: string): Record<string, string> | null {
   return { CLAUDE_CODE_OAUTH_TOKEN: token, ...(typeof plan === "string" && plan ? { CLAUDE_CODE_SUBSCRIPTION_TYPE: plan } : {}) };
 }
 
+/** Why `codex login` failed: Codex's own last line, with a fix for `forced_login_method = "api"`, which blocks the ChatGPT sign-in Cloudroom needs. */
+export function codexLoginFailure(output: string): string {
+  if (!output.includes("ChatGPT login is disabled")) {
+    const last = output.replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").at(-1)?.trim().slice(0, 300);
+    return last ? `Codex sign-in failed: ${last}` : "Codex sign-in did not finish. Click Connect to try again.";
+  }
+  const config = join(process.env.CODEX_HOME || join(homedir(), ".codex"), "config.toml");
+  return `Codex on this Mac only allows API-key login, but Cloudroom needs ChatGPT sign-in. Remove \`forced_login_method = "api"\` from ${config}, then click Connect again. If the file is locked, run \`chflags nouchg ${config}\` first.`;
+}
+
 type MacCodexLogin = { child: ChildProcess; url: string | null; error: string | null; done: boolean };
 let macCodexLoginRun: MacCodexLogin | null = null;
 /** Runs `codex login` on this Mac. Codex opens the default browser and saves the login itself; one run at a time, 10 minutes at most. */
@@ -71,7 +82,8 @@ export function startMacCodexLogin(): MacCodexLogin {
     run.done = true;
     run.error = error.code === "ENOENT" ? "Codex is not installed on this Mac. Install it with `npm i -g @openai/codex`, then click Connect again." : `Codex sign-in could not start: ${error.message}`;
   });
-  child.on("exit", code => { run.done = true; if (code !== 0) run.error ??= "Codex sign-in did not finish. Click Connect to try again."; });
+  // A cancel or the 10-minute timeout kills Codex (code null); only a real exit has an error worth showing.
+  child.on("exit", code => { run.done = true; if (code !== 0) run.error ??= codexLoginFailure(code === null ? "" : output); });
   macCodexLoginRun = run;
   return run;
 }
@@ -145,6 +157,28 @@ async function macOpencodeLogin(): Promise<string | null> {
   try { const parsed: unknown = value && JSON.parse(value); return parsed && (!Array.isArray(parsed) || parsed.length) ? value : null; } catch { return null; }
 }
 
+/** Hermes seeds config.yaml and .env from long commented templates. Comments and blank lines stay on this computer;
+ *  text inside YAML block scalars (`key: |`) is kept as is. */
+function withoutComments(text: string): string {
+  let block = -1;
+  const kept = text.split("\n").filter(line => {
+    const indent = line.length - line.trimStart().length;
+    if (block >= 0 && (!line.trim() || indent > block)) return true;
+    block = /(:|^\s*-)\s*[|>][-+0-9]*\s*(#.*)?$/.test(line) ? indent : -1;
+    return line.trim() !== "" && !line.trimStart().startsWith("#");
+  });
+  return kept.length ? `${kept.join("\n")}\n` : "";
+}
+
+/** This computer's Hermes login, API keys, and providers, or null when Hermes has none here. */
+async function macHermesLogin(): Promise<string | null> {
+  const home = process.env.HERMES_HOME || join(homedir(), ".hermes");
+  const read = (file: string) => readFile(join(home, file), "utf8").catch(() => "");
+  const [auth, env, config] = await Promise.all([read("auth.json"), read(".env").then(withoutComments), read("config.yaml").then(withoutComments)]);
+  const login = Object.fromEntries(Object.entries({ auth, env, config }).filter(([, value]) => value.trim()));
+  return auth.trim() || env.trim() ? JSON.stringify(login) : null;
+}
+
 /** This computer's Cursor CLI login in the file shape the CLI keeps on Linux, or null when Cursor is signed out here.
  *  On macOS the CLI stores it in the Keychain through /usr/bin/security, so reading it the same way shows no macOS prompt. */
 export async function macCursorLogin(): Promise<string | null> {
@@ -188,7 +222,7 @@ export const cloudEnvironmentRequestSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("githubRepos") }),
 ]);
 /** One MCP server in Claude Code's format, as the website stores it for sandboxes. */
-type McpServer = { type: "stdio"; command: string; args: string[]; env: Record<string, string> } | { type: "http" | "sse"; url: string; headers: Record<string, string> };
+export type McpServer = { type: "stdio"; command: string; args: string[]; env: Record<string, string> } | { type: "http" | "sse"; url: string; headers: Record<string, string> };
 type McpChange = { action: "mcp"; servers: Record<string, McpServer>; remove: string[] };
 export type CloudEnvironmentRequest = z.infer<typeof cloudEnvironmentRequestSchema>;
 
@@ -293,7 +327,7 @@ export class SandboxDirectory {
   private readonly backoff = new Map<string, { until: number; delay: number; tries: number }>();
   private uploaded = new Map<string, string>();
   /** `woke` runs after each wake, so the Mac helper lists the new sandbox now instead of at its next minute check. */
-  constructor(readonly account: () => Promise<SandboxAccount | null>, private readonly woke: () => void = () => {}) {}
+  constructor(readonly account: () => Promise<SandboxAccount | null>, private readonly woke: (thread: string) => void = () => {}) {}
 
   /** `only` sends the request solely for that account, so a login started under one account never reaches another. */
   private async call(body: Record<string, unknown>, path = "sandboxes", only?: { account: SandboxAccount; signal: AbortSignal }): Promise<unknown> {
@@ -414,7 +448,7 @@ export class SandboxDirectory {
         this.wakeHarnesses.set(thread, harnesses);
         return this.call({ action: "wake", ...place, harnesses, ...(this.backoff.has(thread) ? { trigger: "retry" } : trigger ? { trigger } : {}) });
       }).then(value => this.remember(viewSchema.parse(value))).then(view => {
-        this.woke();
+        this.woke(view.thread);
         this.backoff.delete(thread);
         if (this.limit?.on) this.limit = { on: false, at: Date.now() };
         return view;
@@ -563,10 +597,47 @@ export class SandboxDirectory {
     this.mcpDigest = digest;
   }
 
+  /** The account's cloud MCP sign-ins: Claude Code's `mcpOAuth` records. Read from the website at most every 5 minutes. */
+  private signIns: { at: number; value: Promise<Record<string, unknown>> } | null = null;
+  private cloudMcpSignIns(fresh = false): Promise<Record<string, unknown>> {
+    if (fresh || !this.signIns || Date.now() - this.signIns.at > 5 * 60_000) {
+      const value = this.cloudLogin("mcp").then(text => {
+        const saved = (text ? JSON.parse(text) : null) as { mcpOAuth?: unknown } | null;
+        return saved?.mcpOAuth && typeof saved.mcpOAuth === "object" && !Array.isArray(saved.mcpOAuth) ? saved.mcpOAuth as Record<string, unknown> : {};
+      });
+      value.catch(() => { this.signIns = null; });
+      this.signIns = { at: Date.now(), value };
+    }
+    return this.signIns.value;
+  }
+  /** For each cloud MCP server that uses OAuth: whether the cloud has signed in to it yet. Others are left out. */
+  async mcpSignIns(servers: MacMcpServer[]): Promise<Record<string, "needed" | "done">> {
+    const inCloud = this.mcpNames ?? (await this.environment({ action: "get" })).mcp;
+    const remote = servers.flatMap(({ name, server }) => inCloud.includes(name) && isRemoteMcp(server) ? [{ name, server }] : []);
+    if (!remote.length) return {};
+    const saved = Object.values(await this.cloudMcpSignIns()) as Partial<McpSignIn>[];
+    const states = await Promise.all(remote.map(async ({ name, server }) =>
+      saved.some(signIn => signIn?.serverName === name && (signIn.accessToken || signIn.refreshToken)) ? "done" as const
+        : await needsMcpSignIn(server) ? "needed" as const : null));
+    return Object.fromEntries(remote.flatMap(({ name }, i) => states[i] ? [[name, states[i]]] : []));
+  }
+  /** Adds a new MCP sign-in to the account's others, replacing that server's old one. Awake sandboxes get it at once. */
+  async saveMcpSignIn(name: string, server: RemoteMcpServer, signIn: McpSignIn): Promise<void> {
+    for (let tries = 1; ; tries++) {
+      const others = Object.entries(await this.cloudMcpSignIns(true)).filter(([, saved]) => (saved as Partial<McpSignIn> | null)?.serverName !== name);
+      try {
+        return await this.saveLogin("mcp", JSON.stringify({ mcpOAuth: { ...Object.fromEntries(others), [mcpSignInKey(name, server)]: signIn } }));
+      } catch (error) {
+        // Usually a sandbox saved its refreshed sign-ins first.
+        if (tries >= 3) throw error;
+      } finally { this.signIns = null; }
+    }
+  }
+
   /** Which logins the website holds for this account's sandboxes. */
   async logins(): Promise<Record<SandboxLogin, boolean>> {
     // Missing names mean an older website that cannot hold that login yet.
-    return z.object({ claude: z.boolean(), codex: z.boolean(), pi: z.boolean(), github: z.boolean(), cursor: z.boolean().default(false), opencode: z.boolean().default(false) }).parse(await this.call({ action: "status" }, "logins"));
+    return z.object({ claude: z.boolean(), codex: z.boolean(), pi: z.boolean(), github: z.boolean(), cursor: z.boolean().default(false), opencode: z.boolean().default(false), mcp: z.boolean().default(false), hermes: z.boolean().default(false) }).parse(await this.call({ action: "status" }, "logins"));
   }
 
   /** Who the account's GitHub login belongs to, or null when GitHub or an older website can't tell. */
@@ -582,7 +653,7 @@ export class SandboxDirectory {
 
   private copiedAt = 0;
   get loginsCopied(): boolean { return this.copiedAt > 0; }
-  /** Copies this Mac's Codex, Pi, opencode, Cursor, and GitHub logins when the user allowed it (ADRs 0128, 0130).
+  /** Copies this Mac's Codex, Pi, opencode, Hermes, Cursor, and GitHub logins when the user allowed it (ADRs 0128, 0130).
    *  At most once a minute, unless the user just clicked Connect. `github` is false after the user picked another GitHub account. */
   async copyMacLogins(force = false, github = true): Promise<void> {
     if (!force && Date.now() - this.copiedAt < RECHECK_MS) return;
@@ -591,7 +662,7 @@ export class SandboxDirectory {
     const files = [["codex", codexAuthPath()], ["pi", join(piHome, "auth.json")]] as const;
     // One failed login never stops the others; all failures are reported together.
     const failed: string[] = [];
-    const save = (name: "codex" | "pi" | "opencode" | "cursor" | "github", value: string) => this.saveLogin(name, value).catch((error: unknown) => { failed.push(`${name}: ${error instanceof Error ? error.message : String(error)}`); });
+    const save = (name: "codex" | "pi" | "opencode" | "hermes" | "cursor" | "github", value: string) => this.saveLogin(name, value).catch((error: unknown) => { failed.push(`${name}: ${error instanceof Error ? error.message : String(error)}`); });
     for (const [name, path] of files) {
       const value = await readFile(path, "utf8").catch(() => null);
       if (!value) continue;
@@ -600,6 +671,8 @@ export class SandboxDirectory {
     }
     const opencode = await macOpencodeLogin();
     if (opencode) await save("opencode", opencode);
+    const hermes = await macHermesLogin();
+    if (hermes) await save("hermes", hermes);
     const cursor = await macCursorLogin();
     if (cursor) await save("cursor", cursor);
     const githubToken = github ? await macGithubToken() : "";
@@ -631,7 +704,7 @@ export class SandboxDirectory {
     }
   }
 
-  private async cloudLogin(name: "claude" | "codex"): Promise<string | null> {
+  private async cloudLogin(name: "claude" | "codex" | "mcp"): Promise<string | null> {
     return z.object({ value: z.string().nullable() }).parse(await this.call({ action: "get", name }, "logins")).value;
   }
 

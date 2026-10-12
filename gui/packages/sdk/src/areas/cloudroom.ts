@@ -133,10 +133,12 @@ export interface CloudSkills {
   issue: string | null;
 }
 export type CloudSkillsChange = { names: string[]; cloud: boolean } | { auto: boolean };
-/** An MCP server on this Mac (Claude Code or Codex). `macOnly`: it runs a program or uses a path only this Mac has. */
+/** An MCP server on this Mac (Claude Code or Codex). `macOnly`: it runs a program or uses a path only this Mac has.
+ *  `signIn`: a cloud server that uses OAuth, "needed" until the user signs in once for the cloud. */
 export interface MacMcpServer {
   name: string;
   macOnly: boolean;
+  signIn?: "needed" | "done";
 }
 
 export interface ClaudeAccountInput { action?: "login" | "cancel" | "complete" | "setup-token" | "key" | "token"; requestId?: string; code?: string; state?: string; apiKey?: string; token?: string; plan?: string }
@@ -189,6 +191,8 @@ export interface CloudroomArea {
   macMcpServers(signal?: AbortSignal): Promise<{ servers: MacMcpServer[] }>;
   /** Copies MCP servers from this Mac to the Cloud environment, or removes them. */
   setCloudMcp(change: { names: string[]; cloud: boolean }): Promise<CloudEnvironment>;
+  /** Starts a one-time cloud sign-in to an MCP server; open `url` in the browser. */
+  startMcpSignIn(name: string): Promise<{ url: string }>;
   /** Mac → cloud: runs a shell command as the agent account of the VM, or of `threadId`'s sandbox. Input and output bytes are hex. */
   runOnVm(input: { command: string; stdin?: string; cwd?: string; threadId?: string }): Promise<{ code: number | null; stdout: string; stderr: string; truncated: boolean }>;
   cancel(): Promise<void>;
@@ -304,6 +308,7 @@ export function createCloudroomArea({ transport }: CreateSdkAreaArgs): Cloudroom
     setCloudSkills: (change) => transport.readJson(request("/skills", change)) as Promise<CloudSkills>,
     macMcpServers: (signal) => transport.readJson(request("/mcp", undefined, signal)) as Promise<{ servers: MacMcpServer[] }>,
     setCloudMcp: (change) => transport.readJson(request("/mcp", change)) as Promise<CloudEnvironment>,
+    startMcpSignIn: (name) => transport.readJson(request("/mcp/sign-in", { name })) as Promise<{ url: string }>,
     runOnVm: (input) => transport.readJson(transport.fetch(`${transport.baseUrl}/api/v1/cloudroom/vm/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) })) as Promise<{ code: number | null; stdout: string; stderr: string; truncated: boolean }>,
     logout: () => transport.readVoid(request("/logout", {})),
     threadStatus: (threadId, signal) => transport.readJson(transport.fetch(`${transport.baseUrl}/api/v1/cloudroom/threads/${encodeURIComponent(threadId)}`, { signal })) as Promise<{ model: string; reasoning: string } | null>,

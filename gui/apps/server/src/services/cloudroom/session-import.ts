@@ -60,7 +60,7 @@ async function run(deps: AppDeps, hostId: string, wanted: { harness: SessionHarn
       const thread = await createImportedThread(deps, hostId, session, turns);
       map[key] = thread.id;
       await writeFile(mapPath, JSON.stringify(map, null, 2), { mode: 0o600 });
-      if (await waitForStart(deps, thread.id) === "error") skip(`Copied to ${thread.id}, but its session failed to start. Open it to retry.`);
+      if (await waitForStart(deps, thread.id) === "error") skip(`Copied to ${thread.id}, but it could not be set up. Open it to retry.`);
       else result.imported.push({ harness, id, threadId: thread.id, title: session.title });
     } catch (error) {
       skip(error instanceof Error ? error.message : String(error));

@@ -9,7 +9,7 @@ import {
 } from "react";
 import { nanoid } from "nanoid";
 import { useSystemProviderInfo } from "@/hooks/queries/system-queries";
-import { useCloudroomConnection, cloudFeatureSupported, useOpenCloudFile } from "@/hooks/queries/cloudroom-queries";
+import { useCloudroomConnection, cloudFeatureSupported, useOpenCloudFile, useCloudroomThread, useCloudroomThreadWorkspace } from "@/hooks/queries/cloudroom-queries";
 import { useNavigate } from "react-router-dom";
 import { useAtom } from "jotai";
 import { useDesktopBrowserReveal } from "@/lib/use-desktop-browser-reveal";
@@ -1223,6 +1223,14 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
       connectedHostIds.has(environment.hostId));
   const hostFileLinksAvailable = isCloudThread || Boolean(thread?.environmentId);
   const { mutate: openCloudFile } = useOpenCloudFile(threadId);
+  // Cloud threads have no environment, so chat resolves relative file links against the sandbox checkout.
+  const cloudThreadState = useCloudroomThread(threadId, isCloudThread);
+  const cloudWorkspace = useCloudroomThreadWorkspace(
+    threadId,
+    isCloudThread && Boolean(cloudThreadState.data?.sessionId),
+  );
+  const timelineWorkspaceRootPath =
+    environment?.path ?? cloudWorkspace.data?.path ?? undefined;
   const createThreadInEnvironment = useCreateThreadInEnvironment({
     projectId,
     environmentId: thread?.environmentId ?? "",
@@ -2782,7 +2790,7 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
             onOpenLocalFileLink={handleOpenTimelineLocalFileLink}
             resolveMentionLink={resolveMentionLink}
             threadId={thread.id}
-            workspaceRootPath={environment?.path ?? undefined}
+            workspaceRootPath={timelineWorkspaceRootPath}
           >
             <PluginPanelTabContent
               tab={tab}
@@ -3052,7 +3060,7 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
               threadRuntimeDisplayStatus: thread.runtime.displayStatus,
               unreadDividerAutoScroll: unreadDividerState.autoScroll,
               unreadDividerPlacement: unreadDividerState.placement,
-              workspaceRootPath: environment?.path ?? undefined,
+              workspaceRootPath: timelineWorkspaceRootPath,
             }}
           />
           {canUseGitUi ? (

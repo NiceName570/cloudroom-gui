@@ -767,7 +767,7 @@ describe("flat completed turn display", () => {
     };
   }
 
-  it("keeps a finished turn's rows exactly as they rendered while it ran", () => {
+  it("keeps a finished turn's rows as they rendered while it ran, under a Worked for row", () => {
     const { liveEvents, finishedEvents } = narratedTurn();
 
     const live = renderTimelineFixture({
@@ -788,15 +788,16 @@ describe("flat completed turn display", () => {
 
     expect(rowSignatures(finished.rows)).toEqual([
       "conversation:user",
+      "turn:4-7",
       "conversation:assistant",
       "work:command",
       "conversation:assistant",
     ]);
-    expect(finished.rows.map((row) => row.id)).toEqual(
-      live.rows.map((row) => row.id),
-    );
-    expect(turnRows(finished.rows)).toHaveLength(0);
-    expect(finished.text).not.toContain("Worked for");
+    expect(
+      finished.rows.filter((row) => row.kind !== "turn").map((row) => row.id),
+    ).toEqual(live.rows.map((row) => row.id));
+    expect(turnRows(live.rows)).toHaveLength(0);
+    expect(finished.text).toContain("Worked for");
   });
 
   it("keeps the work of a finished turn that summary detail would drop", () => {
@@ -818,6 +819,7 @@ describe("flat completed turn display", () => {
     });
 
     expect(rowSignatures(finished.rows)).toEqual([
+      "turn:2-4",
       "work:command",
       "conversation:assistant",
     ]);

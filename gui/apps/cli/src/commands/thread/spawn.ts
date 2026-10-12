@@ -540,6 +540,13 @@ export function registerSpawnCommand(
         const sendAt =
           opts.sendAt === undefined ? undefined : parseSendAt(opts.sendAt);
         const providerId = opts.provider?.trim() ?? (cloudTarget ? "codex" : undefined);
+        const startedOnBehalfOf =
+          !cloudTarget &&
+          opts.originKind === undefined &&
+          parentThreadId !== undefined &&
+          parentThreadId === resolveContextThreadId()
+            ? { initiator: "agent" as const, senderThreadId: parentThreadId }
+            : null;
 
         let thread: Thread;
         try {
@@ -567,7 +574,7 @@ export function registerSpawnCommand(
             ...(permissionMode ? { permissionMode } : {}),
             ...(visibility ? { visibility } : {}),
             environment,
-            startedOnBehalfOf: null,
+            startedOnBehalfOf,
             originKind: opts.originKind ?? null,
             ...(parentThreadId ? { parentThreadId } : {}),
             ...(opts.section ? { sectionId: opts.section } : {}),

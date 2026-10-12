@@ -18,7 +18,9 @@ import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
+  useCloseMobileSidebar,
 } from "@/components/ui/sidebar.js";
+import { SidebarHistoryNavigationControls } from "@/components/sidebar/SidebarHistoryNavigationControls";
 import {
   ThreadTitleMentionResourcesProvider,
   useSidebarThreadTitleMentionResources,
@@ -73,8 +75,10 @@ import {
   getBbDesktopInfo,
   MACOS_CHROME_CONTROL_AXIS_CLASS,
   MACOS_CHROME_CONTROL_NO_DRAG_CLASS,
-  MACOS_TRAFFIC_LIGHT_RESERVE_OFFSET_CLASS,
+  MACOS_SIDEBAR_MIN_WIDTH,
+  MACOS_UNZOOMED_CHROME_CLASS,
   MACOS_WINDOW_DRAG_CLASS,
+  MACOS_WINDOW_NO_DRAG_CLASS,
   shouldReserveMacosTrafficLights,
   shouldUseMacosDesktopChrome,
 } from "@/lib/bb-desktop";
@@ -158,12 +162,13 @@ const sidebarOpenAtom = atomWithStorage<boolean>(
 
 interface SidebarStateBridgeProps {
   children: ReactNode;
+  minWidth?: string;
 }
 
 type SidebarResizeMouseEvent = ReactMouseEvent<HTMLDivElement>;
 type SidebarOpenChangeHandler = (open: boolean) => void;
 
-function SidebarStateBridge({ children }: SidebarStateBridgeProps) {
+function SidebarStateBridge({ children, minWidth }: SidebarStateBridgeProps) {
   const [open, setOpen] = useAtom(sidebarOpenAtom);
   const sidebarWidth = useAtomValue(sidebarWidthAtom);
   const sidebarLiveWidth = useAtomValue(sidebarLiveWidthAtom);
@@ -178,9 +183,10 @@ function SidebarStateBridge({ children }: SidebarStateBridgeProps) {
     handleOpenChange(!open);
     return true;
   });
+  const width = `${sidebarLiveWidth ?? sidebarWidth}px`;
   return (
     <SidebarProvider
-      width={`${sidebarLiveWidth ?? sidebarWidth}px`}
+      width={minWidth ? `max(${width}, ${minWidth})` : width}
       data-testid="app-layout-root"
       open={open}
       onOpenChange={handleOpenChange}
@@ -204,6 +210,7 @@ function SidebarTriggerOverlay({
   usesDesktopChrome,
 }: SidebarTriggerOverlayProps) {
   const isCompactViewport = useIsCompactViewport();
+  const closeOnMobile = useCloseMobileSidebar();
   const shortcut = useAppCommandShortcut("sidebar.toggle");
   const triggerProps = {
     "aria-label": shortcut
@@ -211,18 +218,50 @@ function SidebarTriggerOverlay({
       : "Toggle sidebar",
     "aria-keyshortcuts": shortcut?.ariaKeyshortcuts,
   };
+  if (usesDesktopChrome && reserveMacosTrafficLights) {
+    return (
+      <div
+        data-testid="app-desktop-sidebar-trigger"
+        style={{ zIndex: APP_OVERLAY_LAYER.sidebarTrigger }}
+        className={cn("fixed top-0 left-0", MACOS_UNZOOMED_CHROME_CLASS)}
+      >
+        <div
+          data-testid="app-desktop-window-controls"
+          className={cn(
+            "absolute top-[7px] left-[7px] flex h-[36px] items-center rounded-full bg-foreground/[0.06] pr-[4px] pl-[80px] ring-1 ring-foreground/10 ring-inset",
+            MACOS_WINDOW_DRAG_CLASS,
+          )}
+        >
+          <div className="mr-[6px] h-[18px] w-px bg-foreground/15" />
+          <div
+            className={cn(
+              "flex items-center gap-0.5 [&_button]:size-[30px] [&_button]:rounded-full [&_button_[data-icon-root]]:size-5",
+              MACOS_WINDOW_NO_DRAG_CLASS,
+            )}
+          >
+            <SidebarTrigger {...triggerProps} />
+            <SidebarHistoryNavigationControls
+              onNavigate={closeOnMobile}
+              className="gap-0.5"
+            />
+          </div>
+          <AppCommandShortcutHint
+            shortcut={shortcut}
+            className="absolute left-full ml-1"
+          />
+        </div>
+      </div>
+    );
+  }
   if (usesDesktopChrome) {
     return (
       <div
         data-testid="app-desktop-sidebar-trigger"
         style={{ zIndex: APP_OVERLAY_LAYER.sidebarTrigger }}
         className={cn(
-          "fixed top-0",
+          "fixed top-0 left-0",
           CHROME_ROW_CLASS,
-          reserveMacosTrafficLights
-            ? MACOS_TRAFFIC_LIGHT_RESERVE_OFFSET_CLASS
-            : "left-0",
-          !reserveMacosTrafficLights && BROWSER_SIDEBAR_TRIGGER_INSET_CLASS,
+          BROWSER_SIDEBAR_TRIGGER_INSET_CLASS,
           MACOS_WINDOW_DRAG_CLASS,
         )}
       >
@@ -746,7 +785,11 @@ export function AppLayout({ children }: AppLayoutProps) {
       <ProjectActionsProvider>
         <ThreadTitleMentionResourcesProvider {...titleMentionResources}>
           <ThreadActionsProvider>
-            <SidebarStateBridge>
+            <SidebarStateBridge
+              minWidth={
+                reserveMacosTrafficLights ? MACOS_SIDEBAR_MIN_WIDTH : undefined
+              }
+            >
               {backToAppRoutePath !== null && !isSidebarResizing ? (
                 <BackToAppCommandHandler routePath={backToAppRoutePath} />
               ) : null}

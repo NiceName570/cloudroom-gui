@@ -225,6 +225,7 @@ function runInstall(job: ProviderCliInstallJob): void {
   setSnapshot({ failuresByJobKey, runningJobKey: jobKey });
   const failureToastId = `provider-cli-install-failure:${jobKey}`;
   let installLogChunks = [`$ ${action.command}\n`];
+  let started = 0;
   let completedEvent: ProviderCliInstallCompletedEvent | null = null;
   let errorMessage: string | null = null;
 
@@ -237,7 +238,9 @@ function runInstall(job: ProviderCliInstallJob): void {
         }
         switch (event.type) {
           case "started":
-            installLogChunks = [`$ ${event.command}\n`];
+            // A second start is the provider's fallback installer: keep both logs.
+            if (started++ === 0) installLogChunks = [`$ ${event.command}\n`];
+            else installLogChunks.push(`\n$ ${event.command}\n`);
             break;
           case "output":
             if (event.text.length > 0) {

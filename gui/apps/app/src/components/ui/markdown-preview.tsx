@@ -49,6 +49,7 @@ import {
   type RehypeKatex,
 } from "./markdown-katex-loader.js";
 import { CopyButton } from "./copy-button.js";
+import { useClipboardCopy } from "@/lib/clipboard";
 import { Icon } from "@cloudroom/shared-ui/icon";
 import { usePortalScopeProps } from "@cloudroom/shared-ui/lib/portal-scope";
 import { usePersistentOverlayFocus } from "@cloudroom/shared-ui/responsive-overlay";
@@ -807,11 +808,44 @@ function MarkdownCode({
   }
 
   return (
+    <MarkdownInlineCode codeText={codeText} {...props}>
+      {children}
+    </MarkdownInlineCode>
+  );
+}
+
+function MarkdownInlineCode({
+  children,
+  codeText,
+  ...props
+}: ComponentPropsWithoutRef<"code"> & { codeText: string }) {
+  const { copied, copy } = useClipboardCopy({ text: codeText });
+  return (
     <code
-      className="rounded bg-muted/70 px-1.5 py-0.5 font-mono text-xs"
       {...props}
+      className="group/code cursor-pointer rounded bg-muted/70 px-1.5 py-0.5 font-mono text-xs hover:bg-muted"
+      onClick={(event) => {
+        // Links keep their own click, and drag-selecting part of the code still works.
+        if (
+          event.currentTarget.closest("a") ||
+          !window.getSelection()?.isCollapsed
+        ) {
+          return;
+        }
+        void copy();
+      }}
     >
       {children}
+      <Icon
+        name={copied ? "Check" : "Copy"}
+        aria-hidden
+        className={cn(
+          "ml-1 size-3 align-[-0.125em] in-[a]:hidden",
+          copied
+            ? "inline text-success"
+            : "hidden text-muted-foreground group-hover/code:inline",
+        )}
+      />
     </code>
   );
 }

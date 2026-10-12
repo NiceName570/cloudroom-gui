@@ -94,6 +94,7 @@ export const pendingThreadStartContextSchema = z.object({
   fork: threadForkDescriptorSchema.nullable(),
   /** Provider-facing input when it differs from the persisted start seed. */
   providerInput: z.array(promptInputSchema).optional(),
+  seedWithoutRun: z.boolean().optional(),
   startedOnBehalfOf: startedOnBehalfOfSchema.nullable(),
   titleProvided: z.boolean(),
 });
@@ -769,6 +770,7 @@ async function admitPendingThread(
           ...(startContext.providerInput === undefined
             ? {}
             : { providerInput: startContext.providerInput }),
+          ...(startContext.seedWithoutRun ? { seedWithoutRun: true } : {}),
           startedOnBehalfOf: startContext.startedOnBehalfOf,
           titleProvided: startContext.titleProvided,
         });

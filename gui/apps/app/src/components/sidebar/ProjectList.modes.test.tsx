@@ -18,7 +18,7 @@ import {
 } from "jotai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ThreadListEntry } from "@cloudroom/domain";
-import { ActiveSidebarModeSections, MachineModeSections } from "./ProjectList";
+import { ActiveSidebarModeSections, GroupedModeSections } from "./ProjectList";
 import { buildMachineThreadGroups } from "@cloudroom/client-core";
 import {
   collapsedSidebarSectionIdsAtom,
@@ -43,6 +43,7 @@ vi.mock("@/hooks/queries/host-queries", () => ({
 
 vi.mock("@/hooks/queries/system-queries", () => ({
   useSystemConfig: () => ({ data: undefined }),
+  useSystemProviders: () => ({ data: undefined }),
 }));
 
 const queryClient = new QueryClient();
@@ -67,6 +68,7 @@ function getModeOrderProbeConfig(mode: SidebarOrganizationMode): {
     case "chronological":
       return { entitySectionIds: ["section:a"] };
     case "machine":
+    case "harness":
       return { entitySectionIds: [], hasThreadsSection: true };
   }
 }
@@ -86,7 +88,7 @@ function ModeOrderProbe({ mode }: { mode: SidebarOrganizationMode }) {
 interface ActiveModeOrderProbeProps {
   mode: SidebarOrganizationMode;
   renderChronological?: () => ReactNode;
-  renderMachine?: () => ReactNode;
+  renderGrouped?: (mode: "machine" | "harness") => ReactNode;
   renderProject?: () => ReactNode;
 }
 
@@ -95,14 +97,16 @@ function ActiveModeOrderProbe({
   renderChronological = () => (
     <ModeOrderProbe key="chronological" mode="chronological" />
   ),
-  renderMachine = () => <ModeOrderProbe key="machine" mode="machine" />,
+  renderGrouped = (groupedMode) => (
+    <ModeOrderProbe key={groupedMode} mode={groupedMode} />
+  ),
   renderProject = () => <ModeOrderProbe key="project" mode="project" />,
 }: ActiveModeOrderProbeProps) {
   return (
     <ActiveSidebarModeSections
       mode={mode}
       renderChronological={renderChronological}
-      renderMachine={renderMachine}
+      renderGrouped={renderGrouped}
       renderProject={renderProject}
     />
   );
@@ -157,7 +161,8 @@ function MachineModeProbe({ threads = [] }: { threads?: ThreadListEntry[] }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <MachineModeSections
+      <GroupedModeSections
+        mode="machine"
         threads={threads}
         draftThreadIds={new Set()}
         effectivePinnedThreadIds={new Set()}
@@ -198,7 +203,7 @@ describe("sidebar organization mode sections", () => {
     const renderChronological = vi.fn(() => (
       <ModeOrderProbe mode="chronological" />
     ));
-    const renderMachine = vi.fn(() => <MachineModeProbe />);
+    const renderGrouped = vi.fn(() => <MachineModeProbe />);
     const renderProject = vi.fn(() => <ModeOrderProbe mode="project" />);
 
     render(
@@ -206,7 +211,7 @@ describe("sidebar organization mode sections", () => {
         <ActiveModeOrderProbe
           mode="project"
           renderChronological={renderChronological}
-          renderMachine={renderMachine}
+          renderGrouped={renderGrouped}
           renderProject={renderProject}
         />
       </JotaiProvider>,
@@ -215,7 +220,7 @@ describe("sidebar organization mode sections", () => {
     await screen.findByTestId("project-order");
     expect(renderProject).toHaveBeenCalledOnce();
     expect(renderChronological).not.toHaveBeenCalled();
-    expect(renderMachine).not.toHaveBeenCalled();
+    expect(renderGrouped).not.toHaveBeenCalled();
     expect(mockUseHosts).not.toHaveBeenCalled();
     expect(mockBuildMachineThreadGroups).not.toHaveBeenCalled();
     expect(store.get(sidebarManualSectionOrderAtom)).toEqual(["section:stale"]);

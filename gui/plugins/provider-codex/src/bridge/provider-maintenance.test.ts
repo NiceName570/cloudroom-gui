@@ -91,6 +91,15 @@ describe("Codex provider maintenance", () => {
         displayCommand: "codex update",
       },
       verification: { kind: "version_at_least", version: "1.1.0" },
+      fallback: {
+        command: "sh",
+        args: [
+          "-c",
+          "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh",
+        ],
+        displayCommand:
+          "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh",
+      },
     });
     expect(
       __testing.buildProviderInstallationRun(

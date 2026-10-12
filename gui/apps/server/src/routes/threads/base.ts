@@ -503,6 +503,8 @@ export function registerThreadBaseRoutes(app: Hono, deps: AppDeps): void {
     });
     // Delete child threads and hidden forks too, the same set archive covers.
     for (const target of listThreadWithDescendants(deps, thread)) {
+      // First: deleting on the Mac drops the record of which sandbox the thread used.
+      if (isCloudThread(target)) cloudroom(deps).remove(target.id);
       deleteThreadOnMac(deps, target);
     }
     return context.json({ ok: true });

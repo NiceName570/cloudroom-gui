@@ -13,6 +13,7 @@ const sidebarOrganizationModeSchema = z.enum([
   "project",
   "chronological",
   "machine",
+  "harness",
 ]);
 export type SidebarOrganizationMode = z.infer<
   typeof sidebarOrganizationModeSchema
@@ -52,12 +53,14 @@ export const UI_PREFERENCE_KEYS = [
   "sidebar.sectionOrder",
   "sidebar.manualSectionOrder",
   "sidebar.machineSectionOrder",
+  "sidebar.harnessSectionOrder",
   "sidebar.collapsedSections",
   "sidebar.collapsedProjects",
   "sidebar.collapsedThreads",
   "sidebar.collapsedEnvironments",
   "sidebar.collapsedThreadSections",
   "sidebar.collapsedMachines",
+  "sidebar.collapsedHarnesses",
   "sidebar.footerOrder",
   "sidebar.hiddenFooterItems",
   "sidebar.pluginPanelOrder",
@@ -94,7 +97,7 @@ export const uiPreferenceDefinitions = {
   "sidebar.organizationMode": defineUiPreference(
     sidebarOrganizationModeSchema,
     "project",
-    "How the sidebar groups threads: by project, Custom (chronological), or by machine. Defaults to By project when unset.",
+    "How the sidebar groups threads: by project, Custom (chronological), by machine, or by harness. Defaults to By project when unset.",
   ),
   "sidebar.chronologicalSort": defineUiPreference(
     sidebarChronologicalSortSchema,
@@ -125,6 +128,11 @@ export const uiPreferenceDefinitions = {
     uiPreferenceStringListSchema,
     ["pinned", "machines", "threads"],
     "Top-level section order when the sidebar is organized by machine.",
+  ),
+  "sidebar.harnessSectionOrder": defineUiPreference(
+    uiPreferenceStringListSchema,
+    ["pinned", "harnesses", "threads"],
+    "Top-level section order when the sidebar is organized by harness.",
   ),
   "sidebar.collapsedSections": defineUiPreference(
     z
@@ -157,6 +165,11 @@ export const uiPreferenceDefinitions = {
     uiPreferenceStringListSchema,
     [],
     "Machine ids whose sidebar rows are collapsed.",
+  ),
+  "sidebar.collapsedHarnesses": defineUiPreference(
+    uiPreferenceStringListSchema,
+    [],
+    "Harness provider ids whose sidebar rows are collapsed.",
   ),
   "sidebar.footerOrder": defineUiPreference(
     uiPreferenceStringListSchema,

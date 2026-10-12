@@ -17,6 +17,7 @@ import type {
 import {
   clampPercent,
   downloadedInstallerCommand,
+  formatCommand,
   readCliVersion,
   resolveExecutablePath,
 } from "@cloudroom/provider-bridge-protocol/bridge-kit";
@@ -165,6 +166,21 @@ export interface AcpMaintenanceTarget {
   command: string | null;
 }
 
+function loginCommandFor(target: AcpMaintenanceTarget): string | null {
+  const login = target.maintenance?.loginCommand ?? null;
+  const { command } = target;
+  if (login === null || command === null || !path.isAbsolute(command)) {
+    return login;
+  }
+  const onPath = (process.env.PATH ?? "")
+    .split(path.delimiter)
+    .includes(path.dirname(command));
+  const name = path.basename(command);
+  return !onPath && login.startsWith(`${name} `)
+    ? `${formatCommand(command, [])}${login.slice(name.length)}`
+    : login;
+}
+
 function healthResult(args: {
   target: AcpMaintenanceTarget;
   status: "ready" | "not_installed" | "unauthenticated" | "unknown";
@@ -184,7 +200,7 @@ function healthResult(args: {
       minimumSupportedVersion: null,
       canInstall: installer !== undefined,
       canUpdate: maintenance !== undefined && args.status !== "not_installed",
-      loginCommand: maintenance?.loginCommand ?? null,
+      loginCommand: loginCommandFor(args.target),
     },
   };
 }

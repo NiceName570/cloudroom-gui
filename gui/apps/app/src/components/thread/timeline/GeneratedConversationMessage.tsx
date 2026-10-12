@@ -1,4 +1,10 @@
-import { memo, useCallback, useMemo, useRef } from "react";
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  type CSSProperties,
+} from "react";
 import type { TimelineUserConversationRow } from "@cloudroom/server-contract";
 import type {
   PromptTextMention,
@@ -105,10 +111,36 @@ interface GeneratedConversationTitleArgs {
   systemMessageSubject: SystemMessageSubject | null;
 }
 
+const CLOUD_CHILD_NOTICE_HEADER =
+  /^\[Cloudroom\] Child thread .* (completed:|was interrupted\.|failed or its outcome is uncertain\.)/;
+
+function cloudChildNoticeRange(text: string): [number, number] | null {
+  const header = CLOUD_CHILD_NOTICE_HEADER.exec(text);
+  if (header === null) {
+    return null;
+  }
+  const end = header[0].length;
+  if (header[1] === "completed:") {
+    return [end, text.length];
+  }
+  const cause = text.indexOf(" Cause: ", end);
+  const stop = cause === -1 ? -1 : text.indexOf(" Its turn did not finish", cause);
+  return stop === -1 ? [text.length, text.length] : [cause + 8, stop];
+}
+
 export function generatedConversationBodySlice({
   initiator,
   text,
 }: GeneratedConversationBodyTextArgs): GeneratedConversationBodySlice {
+  const childNotice =
+    initiator === "system" ? cloudChildNoticeRange(text) : null;
+  if (childNotice !== null) {
+    const body = text.slice(...childNotice);
+    return {
+      startOffset: childNotice[0] + body.length - body.trimStart().length,
+      text: body.trim(),
+    };
+  }
   const prefixLength = computeMutedPrefixLength(initiator, text);
   if (prefixLength <= 0) {
     return { startOffset: 0, text };
@@ -324,6 +356,22 @@ function systemMessageIconName(systemMessageKind: SystemMessageKind): IconName {
       return "ListTodo";
     case "unlabeled":
       return "Info";
+  }
+}
+
+function systemMessageIconStyle(
+  systemMessageKind: SystemMessageKind,
+): CSSProperties | undefined {
+  switch (systemMessageKind) {
+    case "child-completed":
+      return { color: "var(--success)" };
+    case "child-failed":
+      return { color: "var(--destructive)" };
+    case "child-interrupted":
+    case "child-needs-attention":
+      return { color: "var(--warning)" };
+    default:
+      return undefined;
   }
 }
 
@@ -662,6 +710,11 @@ export const GeneratedConversationMessage = memo(
         collapsedPreview={collapsedPreview}
         expandable={expandable}
         leadingIcon={leadingIcon}
+        leadingIconStyle={
+          sourceKind === "system"
+            ? systemMessageIconStyle(systemMessageKind)
+            : undefined
+        }
         resolveSegmentLinkHref={resolveSegmentLinkHref}
         onTitleAction={onTitleAction}
         renderBody={renderBody}

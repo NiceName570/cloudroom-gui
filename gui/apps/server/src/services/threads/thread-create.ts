@@ -23,6 +23,7 @@ import { ensureHostSessionReadyForWork } from "../hosts/host-lifecycle.js";
 import { buildExecutionOptions } from "./thread-commands.js";
 import {
   copyForkSourceHistory,
+  recordImportFork,
   resolveThreadForkPoint,
   type ThreadForkPoint,
 } from "./thread-fork-history.js";
@@ -75,6 +76,7 @@ import {
 type ThreadCreateDeps = LoggedPendingInteractionWorkSessionDeps;
 
 interface CreateProvisioningThreadArgs {
+  deferFork: boolean;
   environmentId: string | null;
   executionDefaults: Parameters<
     typeof buildExecutionOptions
@@ -394,6 +396,13 @@ async function createPendingThreadAndAttemptFirstDispatch(
         history: args.fork.history,
       });
     }
+    if (args.deferFork && args.fork !== null) {
+      recordImportFork(
+        deps,
+        thread,
+        args.fork.descriptor.sourceProviderThreadId,
+      );
+    }
     const executionPlanArgs = {
       projectDefaults: args.executionDefaults,
       hostId: hostIdForEnvironmentIntent(deps, args.environmentIntent),
@@ -406,10 +415,11 @@ async function createPendingThreadAndAttemptFirstDispatch(
     );
     const startContext: PendingThreadStartContext = {
       environmentIntent: args.environmentIntent,
-      fork: args.fork?.descriptor ?? null,
+      fork: args.deferFork ? null : (args.fork?.descriptor ?? null),
       ...(args.providerInput !== undefined
         ? { providerInput: args.providerInput }
         : {}),
+      ...(args.deferFork ? { seedWithoutRun: true } : {}),
       startedOnBehalfOf: args.request.startedOnBehalfOf,
       titleProvided: Boolean(args.request.title),
     };
@@ -638,13 +648,6 @@ export async function createThreadFromRequest(
           : "startedOnBehalfOf.senderThreadId must match sourceThreadId",
       );
     }
-    if (originKind === null) {
-      throw new ApiError(
-        400,
-        "invalid_request",
-        "startedOnBehalfOf requires an originKind",
-      );
-    }
   }
   await validatePromptAttachmentReferences({
     dataDir: deps.config.dataDir,
@@ -796,6 +799,7 @@ export async function createThreadFromRequest(
   }
 
   const createArgs = {
+    deferFork: options.importedFork !== undefined,
     environmentId,
     environmentIntent,
     executionDefaults: resolvedExecutionDefaults,

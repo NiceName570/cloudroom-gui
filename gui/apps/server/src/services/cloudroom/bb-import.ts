@@ -50,7 +50,7 @@ async function run(deps: AppDeps, hostId: string): Promise<BbImportResult> {
         map[source.id] = thread.id;
         await writeFile(mapPath, JSON.stringify(map, null, 2), { mode: 0o600 });
         const status = await waitForStart(deps, thread.id);
-        if (status === "error") skip(`Copied to ${thread.id}, but its session failed to start. Open it to retry.`);
+        if (status === "error") skip(`Copied to ${thread.id}, but it could not be set up. Open it to retry.`);
         else result.imported.push({ bbThreadId: source.id, threadId: thread.id, title: source.title });
       } catch (error) {
         skip(error instanceof Error ? error.message : String(error));

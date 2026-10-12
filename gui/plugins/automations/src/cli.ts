@@ -355,6 +355,24 @@ async function resolveScriptFileHostId(
   return thread.environment.hostId;
 }
 
+// Agents copy the short Claude ID from their system prompt (claude-opus-5-5),
+// which silently picks the 200K model. Keep the caller's exact 1M variant.
+async function preferCallerModel(
+  bb: Pick<BbPluginApi, "sdk">,
+  ctx: Pick<PluginCliContext, "threadId">,
+  model: string,
+): Promise<string> {
+  if (ctx.threadId === undefined) return model;
+  try {
+    const own = await bb.sdk.threads.defaultExecutionOptions({
+      threadId: ctx.threadId,
+    });
+    return own?.model === `${model}[1m]` ? own.model : model;
+  } catch {
+    return model;
+  }
+}
+
 type ScriptFileSource = {
   path: string;
   hostId: string | undefined;
@@ -463,7 +481,7 @@ async function buildExecution(
         mode: "agent",
         prompt,
         providerId: provider,
-        model,
+        model: await preferCallerModel(bb, ctx, model),
         reasoningLevel:
           reasoning === undefined ? "medium" : parseReasoningLevel(reasoning),
         ...(parsedServiceTier === null || parsedServiceTier === undefined
@@ -531,6 +549,7 @@ const COMPLETE_EXECUTION_FLAG_NAMES = [
 async function buildAgentExecutionUpdate(
   bb: Pick<BbPluginApi, "sdk">,
   args: ParsedArgs,
+  ctx: Pick<PluginCliContext, "threadId">,
 ): Promise<AgentExecutionUpdate | undefined> {
   const agentOptionNames = [
     "prompt",
@@ -552,7 +571,9 @@ async function buildAgentExecutionUpdate(
   if (args.flags.has("provider")) {
     update.providerId = requireFlag(args, "provider");
   }
-  if (args.flags.has("model")) update.model = requireFlag(args, "model");
+  if (args.flags.has("model")) {
+    update.model = await preferCallerModel(bb, ctx, requireFlag(args, "model"));
+  }
   if (args.flags.has("reasoning")) {
     update.reasoningLevel = parseReasoningLevel(requireFlag(args, "reasoning"));
   }
@@ -633,7 +654,7 @@ async function buildUpdateRequest(
     request.execution = built.execution;
     scriptSource = built.scriptSource;
   } else {
-    const agentUpdate = await buildAgentExecutionUpdate(bb, args);
+    const agentUpdate = await buildAgentExecutionUpdate(bb, args, ctx);
     if (agentUpdate !== undefined) {
       request.agent = agentUpdate;
     }

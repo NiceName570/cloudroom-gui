@@ -26,7 +26,10 @@ import {
 import { isTransientReadError } from "@/hooks/queries/query-helpers";
 import { stripProjectThreads } from "@/hooks/queries/project-queries";
 import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
-import { useSystemConfig } from "@/hooks/queries/system-queries";
+import {
+  useSystemConfig,
+  useSystemProviders,
+} from "@/hooks/queries/system-queries";
 import { useReorderPinnedThread } from "@/hooks/mutations/thread-state-mutations";
 import {
   useCreateThreadSection,
@@ -82,6 +85,7 @@ import {
 } from "./ProjectRow";
 import type { ProjectThreadListState } from "./ProjectRow";
 import {
+  buildHarnessThreadGroups,
   buildMachineThreadGroups,
   buildPinnedSidebarState,
   CHRONOLOGICAL_CONTAINER_ID,
@@ -118,6 +122,7 @@ import {
   sidebarChronologicalSortAtom,
   sidebarCollapsedThreadSectionsAtom,
   sidebarCollapsedMachinesAtom,
+  sidebarCollapsedHarnessesAtom,
   sidebarOrganizationModeAtom,
   type SidebarChronologicalSort,
   type CollapsibleSidebarSectionId,
@@ -219,6 +224,7 @@ interface SelectedThreadSidebarExpansionArgs {
 interface SelectedThreadSidebarExpansion {
   sectionKey?: string;
   machineKey?: string;
+  harnessKey?: string;
   projectId?: string;
   sidebarSectionId?: CollapsibleSidebarSectionId;
 }
@@ -261,6 +267,10 @@ export function getSelectedThreadSidebarExpansion({
     return {
       machineKey: selectedThread.environmentHostId ?? NO_MACHINE_GROUP_KEY,
     };
+  }
+
+  if (organizationMode === "harness") {
+    return { harnessKey: selectedThread.providerId };
   }
 
   if (organizationMode === "chronological") {
@@ -596,17 +606,17 @@ interface BuiltInSectionRenderState {
 interface ActiveSidebarModeSectionsProps {
   mode: SidebarOrganizationMode;
   renderChronological: () => ReactNode;
-  renderMachine: () => ReactNode;
+  renderGrouped: (mode: GroupedSidebarMode) => ReactNode;
   renderProject: () => ReactNode;
 }
 
 export function ActiveSidebarModeSections({
   mode,
   renderChronological,
-  renderMachine,
+  renderGrouped,
   renderProject,
 }: ActiveSidebarModeSectionsProps) {
-  if (mode === "machine") return renderMachine();
+  if (mode === "machine" || mode === "harness") return renderGrouped(mode);
   if (mode === "chronological") return renderChronological();
   return renderProject();
 }
@@ -1107,7 +1117,14 @@ function SectionModeSections({
   );
 }
 
-interface MachineModeSectionsProps
+type GroupedSidebarMode = "machine" | "harness";
+
+const GROUPED_MODE_COLLAPSED_ATOMS = {
+  machine: sidebarCollapsedMachinesAtom,
+  harness: sidebarCollapsedHarnessesAtom,
+} satisfies Record<GroupedSidebarMode, typeof sidebarCollapsedMachinesAtom>;
+
+interface GroupedModeSectionsProps
   extends BuiltInSectionRenderState, GroupedModePinnedProps {
   collapsedEnvironmentIds: Set<string>;
   collapsedThreadIds: Set<string>;
@@ -1123,13 +1140,14 @@ interface MachineModeSectionsProps
     label: string,
   ) => ReactNode;
   isSectionDisplayOptionsOpen: (sectionId: SidebarSectionId) => boolean;
+  mode: GroupedSidebarMode;
   selectedThreadId?: string;
   status: ConnectionAwareQueryStatus;
   threads: ThreadListEntry[];
   threadsSection: Omit<BuiltInSidebarSectionOptions, "content">;
 }
 
-export function MachineModeSections({
+export function GroupedModeSections({
   collapsedEnvironmentIds,
   collapsedSectionIds,
   collapsedThreadIds,
@@ -1137,6 +1155,7 @@ export function MachineModeSections({
   draftThreadIds,
   effectivePinnedThreadIds,
   isSectionDisplayOptionsOpen,
+  mode,
   onProjectSelect,
   onToggleCollapsed,
   onToggleEnvironmentCollapsed,
@@ -1152,23 +1171,26 @@ export function MachineModeSections({
   status,
   threads,
   threadsSection,
-}: MachineModeSectionsProps) {
+}: GroupedModeSectionsProps) {
   const progressiveDisclosureEnabled = useSidebarProgressiveDisclosureEnabled();
-  const { data: hosts } = useHosts();
-  const [collapsedMachineKeyList, setCollapsedMachineKeyList] = useAtom(
-    sidebarCollapsedMachinesAtom,
+  const { data: hosts } = useHosts({ enabled: mode === "machine" });
+  const { data: providers } = useSystemProviders({
+    enabled: mode === "harness",
+  });
+  const [collapsedGroupKeyList, setCollapsedGroupKeyList] = useAtom(
+    GROUPED_MODE_COLLAPSED_ATOMS[mode],
   );
-  const collapsedMachineKeys = useMemo(
-    () => new Set(collapsedMachineKeyList),
-    [collapsedMachineKeyList],
+  const collapsedGroupKeys = useMemo(
+    () => new Set(collapsedGroupKeyList),
+    [collapsedGroupKeyList],
   );
-  const toggleMachineCollapsed = useCallback<ToggleCollapsedId>(
-    (machineKey) => {
-      setCollapsedMachineKeyList((current) =>
-        toggleCollapsedIdList({ current, id: machineKey }),
+  const toggleGroupCollapsed = useCallback<ToggleCollapsedId>(
+    (groupKey) => {
+      setCollapsedGroupKeyList((current) =>
+        toggleCollapsedIdList({ current, id: groupKey }),
       );
     },
-    [setCollapsedMachineKeyList],
+    [setCollapsedGroupKeyList],
   );
   const nonPinnedThreads = useMemo(
     () =>
@@ -1183,9 +1205,12 @@ export function MachineModeSections({
     status,
     threads: nonPinnedThreads,
   });
-  const machineSections = useMemo(
+  const groupSections = useMemo(
     () =>
-      buildMachineThreadGroups(nonPinnedThreads, hosts ?? []).map((group) => ({
+      (mode === "machine"
+        ? buildMachineThreadGroups(nonPinnedThreads, hosts ?? [])
+        : buildHarnessThreadGroups(nonPinnedThreads, providers ?? [])
+      ).map((group) => ({
         activity: getCollapsedChildActivity(group.threads, draftThreadIds),
         key: group.key,
         label: group.label,
@@ -1194,48 +1219,48 @@ export function MachineModeSections({
           threads: group.threads,
         } satisfies ProjectThreadListState,
       })),
-    [draftThreadIds, hosts, nonPinnedThreads],
+    [draftThreadIds, hosts, mode, nonPinnedThreads, providers],
   );
-  const machineSectionIds = useMemo(
+  const groupSectionIds = useMemo(
     () =>
-      machineSections.map((section) =>
-        buildSidebarEntitySectionId("machine", section.key),
+      groupSections.map((section) =>
+        buildSidebarEntitySectionId(mode, section.key),
       ),
-    [machineSections],
+    [groupSections, mode],
   );
-  const machineSectionsById = useMemo(
+  const groupSectionsById = useMemo(
     () =>
       new Map(
-        machineSections.map((section) => [
-          buildSidebarEntitySectionId("machine", section.key),
+        groupSections.map((section) => [
+          buildSidebarEntitySectionId(mode, section.key),
           section,
         ]),
       ),
-    [machineSections],
+    [groupSections, mode],
   );
   const { onOrderChange, order, persistedOrder } = useSidebarModeSectionOrder({
-    mode: "machine",
-    entitySectionIds: machineSectionIds,
-    hasThreadsSection: machineSections.length === 0,
+    mode,
+    entitySectionIds: groupSectionIds,
+    hasThreadsSection: groupSections.length === 0,
     showPinnedSection,
   });
   const reorderDisabled = order.length < 2;
   const compareThreads = compareThreadsForSection("threads");
   const allThreadItems = useMemo(
     () =>
-      machineSections.length === 0
+      groupSections.length === 0
         ? buildProjectThreadGroups(
             nonPinnedThreads,
             compareThreads,
             draftThreadIds,
           )
         : [],
-    [compareThreads, draftThreadIds, machineSections.length, nonPinnedThreads],
+    [compareThreads, draftThreadIds, groupSections.length, nonPinnedThreads],
   );
-  const machineGroups = useMemo(
+  const groupItems = useMemo(
     () =>
-      machineSections.map((section) => {
-        const sectionId = buildSidebarEntitySectionId("machine", section.key);
+      groupSections.map((section) => {
+        const sectionId = buildSidebarEntitySectionId(mode, section.key);
         return buildGroupSectionItem(
           section.key,
           sectionId,
@@ -1245,18 +1270,16 @@ export function MachineModeSections({
           draftThreadIds,
         );
       }),
-    [compareThreadsForSection, draftThreadIds, machineSections],
+    [compareThreadsForSection, draftThreadIds, groupSections, mode],
   );
-  const machineItemsBySectionId = useMemo(
+  const groupItemsBySectionId = useMemo(
     () =>
-      new Map(
-        machineGroups.map((group) => [group.group.key, group.group.items]),
-      ),
-    [machineGroups],
+      new Map(groupItems.map((group) => [group.group.key, group.group.items])),
+    [groupItems],
   );
   const groupRootItems = useMemo<ProjectThreadItem[]>(
-    () => [...allThreadItems, ...machineGroups],
-    [allThreadItems, machineGroups],
+    () => [...allThreadItems, ...groupItems],
+    [allThreadItems, groupItems],
   );
   const threadDnd = useGroupedModeThreadDnd({
     collapsedThreadIds,
@@ -1312,7 +1335,7 @@ export function MachineModeSections({
           showPinnedSection,
         });
         if (builtInSection !== undefined) return builtInSection;
-        const section = machineSectionsById.get(sectionId);
+        const section = groupSectionsById.get(sectionId);
         if (!section) return null;
         return (
           <SortableSidebarSection
@@ -1326,14 +1349,14 @@ export function MachineModeSections({
             collapsedActivity={section.activity}
             collapsedThreads={section.threadListState.threads}
             collapseControl={{
-              isCollapsed: collapsedMachineKeys.has(section.key),
-              onToggleCollapsed: () => toggleMachineCollapsed(section.key),
+              isCollapsed: collapsedGroupKeys.has(section.key),
+              onToggleCollapsed: () => toggleGroupCollapsed(section.key),
             }}
             consumeClickSuppression={consumeClickSuppression}
           >
             <ProjectThreadTree
               dndParentKey={sectionId}
-              rootItems={machineItemsBySectionId.get(sectionId)}
+              rootItems={groupItemsBySectionId.get(sectionId)}
               threadListState={section.threadListState}
               progressiveDisclosureEnabled={progressiveDisclosureEnabled}
               compareThreads={compareThreadsForSection(sectionId)}
@@ -1562,6 +1585,7 @@ function ProjectListComponent({
     collapsedEnvironmentIdsAtom,
   );
   const setCollapsedMachineKeyList = useSetAtom(sidebarCollapsedMachinesAtom);
+  const setCollapsedHarnessKeyList = useSetAtom(sidebarCollapsedHarnessesAtom);
   const [collapsedSidebarSectionIdList, setCollapsedSidebarSectionIdList] =
     useAtom(collapsedSidebarSectionIdsAtom);
   const [openSidebarMenu, setOpenSidebarMenu] = useState<OpenSidebarMenu>(null);
@@ -1733,6 +1757,12 @@ function ProjectListComponent({
         removeCollapsedIds(current, new Set([machineKey])),
       );
     }
+    if (expansion.harnessKey) {
+      const harnessKey = expansion.harnessKey;
+      setCollapsedHarnessKeyList((current) =>
+        removeCollapsedIds(current, new Set([harnessKey])),
+      );
+    }
     if (expansion.sectionKey) {
       const sectionKey = expansion.sectionKey;
       setCollapsedSectionList((current) =>
@@ -1758,6 +1788,7 @@ function ProjectListComponent({
     setCollapsedEnvironmentIdList,
     setCollapsedSectionList,
     setCollapsedMachineKeyList,
+    setCollapsedHarnessKeyList,
     setCollapsedProjectIdList,
     setCollapsedSidebarSectionIdList,
     setCollapsedThreadIdList,
@@ -1880,8 +1911,10 @@ function ProjectListComponent({
       <ProjectListShell>
         <ActiveSidebarModeSections
           mode={organizationMode}
-          renderMachine={() => (
-            <MachineModeSections
+          renderGrouped={(groupedMode) => (
+            <GroupedModeSections
+              key={groupedMode}
+              mode={groupedMode}
               threads={threads}
               draftThreadIds={draftThreadIds}
               effectivePinnedThreadIds={

@@ -64,6 +64,7 @@ import {
   streamProviderInstallation,
 } from "./provider-installation.js";
 import type {
+  ProviderInstallationCommand,
   ProviderInstallationStatus,
   ProviderInstallationVerification,
 } from "@cloudroom/provider-bridge-protocol";
@@ -299,34 +300,41 @@ async function runProviderInstallationOnHost(
     }
     const stream =
       options.streamProviderInstallation ?? streamProviderInstallation;
-    let events = await readProviderCliInstallEvents(
-      stream({
-        providerId: command.providerId,
-        plan: run.command,
-        env,
-      }),
-    );
-    if (events.some((event) => event.type === "completed" && event.success)) {
+    const succeeded = (events: ProviderCliInstallEvent[]) =>
+      events.some((event) => event.type === "completed" && event.success);
+    const runVerified = async (
+      plan: ProviderInstallationCommand,
+    ): Promise<ProviderCliInstallEvent[]> => {
+      const events = await readProviderCliInstallEvents(
+        stream({ providerId: command.providerId, plan, env }),
+      );
+      if (!succeeded(events)) return events;
       try {
         await options.refreshShellEnv({ force: true });
         const status =
           await options.providerInstallationStatus(maintenanceArgs);
-        if (!installationVerificationPassed(run.verification, status)) {
-          events = failProviderInstallationVerification({
-            providerId: command.providerId,
-            events,
-            message: `${command.providerId} ${command.action} exited successfully, but the provider could not verify the installed result.`,
-          });
-        }
+        return installationVerificationPassed(run.verification, status)
+          ? events
+          : failProviderInstallationVerification({
+              providerId: command.providerId,
+              events,
+              message: `${command.providerId} ${command.action} exited successfully, but the provider could not verify the installed result.`,
+            });
       } catch {
-        events = failProviderInstallationVerification({
+        return failProviderInstallationVerification({
           providerId: command.providerId,
           events,
           message: `${command.providerId} ${command.action} exited successfully, but its installation status could not be verified.`,
         });
       }
+    };
+    let events = await runVerified(run.command);
+    // A tangled setup (two npm prefixes, a root-owned folder) can defeat the
+    // normal command; the provider's own installer is the repair path.
+    if (!succeeded(events) && run.fallback !== undefined) {
+      events = [...events, ...(await runVerified(run.fallback))];
     }
-    if (events.some((event) => event.type === "completed" && event.success)) {
+    if (succeeded(events)) {
       await options.runtimeManager.invalidateProviderMaintenanceRuntime();
     }
     return { events };

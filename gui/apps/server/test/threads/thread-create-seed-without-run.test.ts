@@ -535,33 +535,36 @@ describe("thread creation child-thread boundary validation", () => {
     );
   });
 
-  it("rejects startedOnBehalfOf without an originKind", async () => {
+  it("runs a child an agent started for its parent and credits the parent", async () => {
     await withChildBoundaryHarness(
-      "started-on-behalf-no-origin",
+      "started-on-behalf-of-parent",
       async ({ harness, hostId, path, projectId, sourceThreadId }) => {
-        const error = await captureCreateError(() =>
-          createThreadFromRequest(harness.deps, {
-            environment: {
-              type: "host",
-              hostId,
-              workspace: { type: "unmanaged", path },
-            },
-            input: textInput("Untagged seed"),
-            origin: "app",
-            parentThreadId: sourceThreadId,
-            projectId,
-            providerId: "codex",
-            startedOnBehalfOf: {
-              initiator: "agent",
-              senderThreadId: sourceThreadId,
-            },
-          }),
+        const thread = await createThreadFromRequest(harness.deps, {
+          environment: {
+            type: "host",
+            hostId,
+            workspace: { type: "unmanaged", path },
+          },
+          input: textInput("Delegated task"),
+          origin: "cli",
+          parentThreadId: sourceThreadId,
+          projectId,
+          providerId: "codex",
+          startedOnBehalfOf: {
+            initiator: "agent",
+            senderThreadId: sourceThreadId,
+          },
+        });
+
+        const turnRequest = threadStartTurnRequest(harness, thread.id);
+        expect(turnRequest.initiator).toBe("agent");
+        expect(turnRequest.senderThreadId).toBe(sourceThreadId);
+        const queuedStart = await waitForQueuedCommand(
+          harness,
+          ({ command }) =>
+            command.type === "thread.start" && command.threadId === thread.id,
         );
-        expect(error.status).toBe(400);
-        expect(error.body.code).toBe("invalid_request");
-        expect(error.body.message).toBe(
-          "startedOnBehalfOf requires an originKind",
-        );
+        expect(queuedStart.command.type).toBe("thread.start");
       },
     );
   });

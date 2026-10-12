@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type MouseEvent,
 } from "react";
 import { flushSync } from "react-dom";
@@ -59,6 +60,7 @@ interface MessageActionBarProps {
   mobileActionDisplay: "inline" | "overflow";
   addToChatAttachments?: readonly PromptDraftAttachment[];
   copyImageUrl?: string;
+  createdAt?: number;
   onAddToChat?: (
     text: string,
     attachments?: readonly PromptDraftAttachment[],
@@ -311,6 +313,52 @@ const ACTION_ROW_CLASS =
   "absolute top-0 flex max-w-full items-center gap-2 overflow-hidden has-[[data-state=open]]:[&_button]:opacity-100";
 const ACTION_ROW_EXPANDED_CLASS = "absolute top-0 z-10 flex items-center gap-2";
 
+const BUBBLE_ALIGN_INSET_PX = 13;
+const PROSE_ALIGN_INSET_PX = -4;
+const OVERFLOW_TRIGGER_TIGHTEN_PX = 4;
+
+function MessageTimestamp({
+  createdAt,
+  style,
+  collisionBoundary,
+}: {
+  createdAt: number;
+  style: CSSProperties;
+  collisionBoundary: HTMLElement | undefined;
+}) {
+  const date = new Date(createdAt);
+  const isToday = date.toDateString() === new Date().toDateString();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <time
+          dateTime={date.toISOString()}
+          className={cn(
+            "absolute top-0 flex h-5 items-center whitespace-nowrap text-xs tabular-nums text-muted-foreground",
+            HOVER_REVEAL_CLASS,
+          )}
+          style={style}
+        >
+          {date.toLocaleString(undefined, {
+            ...(isToday ? {} : { month: "short", day: "numeric" }),
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </time>
+      </TooltipTrigger>
+      <TooltipContent
+        side={ACTION_TOOLTIP_SIDE}
+        collisionBoundary={collisionBoundary}
+      >
+        {date.toLocaleString(undefined, {
+          dateStyle: "full",
+          timeStyle: "medium",
+        })}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 const BUBBLE_ALIGN_INSET_CLASS = "pr-[13px] max-md:pointer-coarse:pr-[11px]";
 const BUBBLE_ALIGN_OFFSET_CLASS =
   "right-[13px] max-md:pointer-coarse:right-[11px]";
@@ -389,6 +437,7 @@ export function MessageActionBar({
   mobileActionDisplay,
   addToChatAttachments = [],
   copyImageUrl,
+  createdAt,
   onAddToChat,
   onEdit,
   onFork,
@@ -632,6 +681,15 @@ export function MessageActionBar({
     availableWidth,
     actionWidth: DESKTOP_ACTION_WIDTH_PX,
   });
+  const timestampOffset =
+    actionRowWidth(
+      layout.inlineCount + (layout.overflowCount > 0 ? 1 : 0),
+      DESKTOP_ACTION_WIDTH_PX,
+    ) +
+    ACTION_ROW_GAP_PX -
+    (layout.inlineCount > 0 && layout.overflowCount > 0
+      ? OVERFLOW_TRIGGER_TIGHTEN_PX
+      : 0);
 
   return (
     <TooltipProvider delayDuration={300}>
@@ -698,6 +756,17 @@ export function MessageActionBar({
             </DropdownMenu>
           ) : null}
         </div>
+        {createdAt === undefined ? null : (
+          <MessageTimestamp
+            createdAt={createdAt}
+            style={
+              alignment === "end"
+                ? { right: BUBBLE_ALIGN_INSET_PX + timestampOffset }
+                : { left: PROSE_ALIGN_INSET_PX + timestampOffset }
+            }
+            collisionBoundary={collisionBoundary}
+          />
+        )}
       </div>
     </TooltipProvider>
   );

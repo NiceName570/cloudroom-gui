@@ -34,6 +34,7 @@ import {
 import type { PaneContent, SplitLayout } from "@/lib/split-layout";
 import { usePromptDraftStorage } from "@/hooks/usePromptDraftStorage";
 import { createBbDesktopApi } from "@/test/bb-desktop-test-utils";
+import { MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS } from "@/lib/bb-desktop";
 import { resourceRouteLabelAtom } from "@/components/layout/resourceRouteLabelAtom";
 import {
   resetPluginSlotStoreForTest,
@@ -1958,9 +1959,13 @@ describe("SplitThreadArea", () => {
       (await screen.findByText(path))
         .closest("header")
         ?.querySelector('[data-testid="app-page-header-content-row"]');
-    expect((await contentRow("top-left"))?.className).toContain("pl-[104px]");
+    expect((await contentRow("top-left"))?.className).toContain(
+      MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS,
+    );
     for (const path of ["top-right", "bottom-left", "bottom-right"]) {
-      expect((await contentRow(path))?.className).not.toContain("pl-[104px]");
+      expect((await contentRow(path))?.className).not.toContain(
+        MACOS_COLLAPSED_TOP_LEFT_RESERVE_CLASS,
+      );
     }
 
     expect(screen.getAllByRole("button", { name: /Full Screen/ })).toHaveLength(

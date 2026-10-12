@@ -13,10 +13,10 @@ import { sdk } from "@/lib/sdk";
 import { copyToClipboardWithToast } from "@/lib/clipboard";
 import { openUrlInExternalBrowser } from "@/lib/url-open-routing";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { MAC_MCP_KEY, useMcpSignIn } from "@/components/CloudMcpSignIn";
 
 const ENVIRONMENT_KEY = ["cloudroom-environment"];
 const SKILLS_KEY = ["cloudroom-cloud-skills"];
-const MCP_KEY = ["cloudroom-mac-mcp"];
 const VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const PREINSTALLED = "Node.js · Git · GitHub CLI · Claude Code · Codex · Pi · Cursor";
 // Dimmer than the default placeholder, so the example never reads as saved text.
@@ -429,7 +429,8 @@ function SkillsCard() {
 
 /** MCP servers from this Mac's Claude Code and Codex. The Cloud environment says which ones are in the cloud. */
 function McpCard({ inCloud, onSaved }: { inCloud: string[]; onSaved: (data: CloudEnvironment) => void }) {
-  const mac = useQuery({ queryKey: MCP_KEY, queryFn: ({ signal }) => sdk.cloudroom.macMcpServers(signal), refetchInterval: 15_000, retry: false });
+  const mac = useQuery({ queryKey: MAC_MCP_KEY, queryFn: ({ signal }) => sdk.cloudroom.macMcpServers(signal), refetchInterval: 15_000, retry: false });
+  const signIn = useMcpSignIn();
   const change = useMutation({ mutationFn: (change: { names: string[]; cloud: boolean }) => sdk.cloudroom.setCloudMcp(change), onSuccess: onSaved });
   const found = mac.data?.servers ?? [];
   // A server removed from this Mac stays listed while it is in the cloud, so it can be removed there too.
@@ -437,6 +438,7 @@ function McpCard({ inCloud, onSaved }: { inCloud: string[]; onSaved: (data: Clou
     .map((server) => ({ ...server, cloud: inCloud.includes(server.name) }))
     .sort((a, b) => Number(a.macOnly) - Number(b.macOnly) || a.name.localeCompare(b.name));
   const usable = servers.filter((server) => !server.macOnly);
+  const needSignIn = servers.filter((server) => server.cloud && "signIn" in server && server.signIn === "needed");
   const set = (cloud: boolean) => {
     const names = usable.filter((server) => server.cloud !== cloud).map((server) => server.name);
     if (names.length) change.mutate({ names, cloud });
@@ -483,6 +485,24 @@ function McpCard({ inCloud, onSaved }: { inCloud: string[]; onSaved: (data: Clou
               ),
             )}
           </div>
+          {/* Servers that use OAuth need one sign-in for the cloud; the Mac's own login stays on the Mac. */}
+          {needSignIn.map((server) => (
+            <div key={server.name} className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5">
+              <div className="flex min-w-0 items-center gap-2.5 text-xs">
+                <Icon name="Lock" className="size-3.5 shrink-0 text-subtle-foreground" />
+                <span className="truncate font-mono text-foreground">{server.name}</span>
+                <span className="shrink-0 text-subtle-foreground">needs a cloud sign-in</span>
+              </div>
+              <Button size="sm" variant="outline" disabled={signIn.waitingFor === server.name} onClick={() => signIn.start(server.name)}>
+                {signIn.waitingFor === server.name ? "Waiting for your browser…" : "Sign in"}
+              </Button>
+            </div>
+          ))}
+          {signIn.error && (
+            <p role="alert" className="border-t border-border px-4 py-2 text-xs text-destructive-text">
+              {errorText(signIn.error)}
+            </p>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface-recessed/40 px-4 py-2">
             <span className="text-xs text-subtle-foreground">Keys in these servers are stored encrypted, like API keys.</span>
             <div className="flex items-center gap-1">

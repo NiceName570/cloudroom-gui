@@ -12,10 +12,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import { readClaudeToken } from "@cloudroom/process-utils/claude-token";
 import type { UsageWindow } from "./contract.js";
 import { readReset, SignInAgainError, type Secret } from "./tokens.js";
 
-const TOKEN = /(sk-ant-oat[A-Za-z0-9_-]{20,})[^A-Za-z0-9_-]/;
 const YEAR_MS = 365 * 24 * 60 * 60_000;
 const LIMITS = "anthropic-ratelimit-unified";
 
@@ -88,9 +88,7 @@ export class ClaudeLogin {
     let output = "";
     child.stdout.on("data", (chunk: Buffer) => {
       output = (output + chunk.toString()).slice(-65536);
-      const token = output
-        .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "")
-        .match(TOKEN)?.[1];
+      const token = readClaudeToken(output);
       if (token && run.token === null) {
         run.token = token;
         finish(null);

@@ -79,6 +79,7 @@ import { buildMarkdownMessageLinkRouting } from "@/components/ui/markdown-messag
 
 interface ConversationMessageContentBaseProps {
   attachments: TimelineConversationAttachments | null;
+  createdAt?: number;
   onOpenLocalFileLink?: ThreadTimelineLocalFileLinkHandler;
   onOpenPluginPanel?: MarkdownMessageDirectives["openThreadPanel"];
   pluginActions?: readonly ThreadTimelinePluginMessageAction[];
@@ -153,6 +154,7 @@ type ConversationMessageContentProps =
 interface UserConversationMessageProps {
   addToChatAttachments: readonly PromptDraftAttachment[];
   attachmentItems: ConversationAttachmentItems;
+  createdAt?: number;
   originKind: ThreadOriginKind | null;
   pluginActions?: readonly ThreadTimelinePluginMessageAction[];
   initiator: TimelineUserConversationRow["initiator"];
@@ -181,6 +183,7 @@ interface UserConversationMessageProps {
 interface AssistantConversationMessageProps extends AssistantMessageRowIdentity {
   addToChatAttachments: readonly PromptDraftAttachment[];
   attachmentItems: ConversationAttachmentItems;
+  createdAt?: number;
   pluginActions?: readonly ThreadTimelinePluginMessageAction[];
   onAddToChat?: ThreadTimelineAddToChatHandler;
   onFork?: () => void;
@@ -334,6 +337,7 @@ function buildAddToChatAttachments(
 function UserConversationMessage({
   addToChatAttachments,
   attachmentItems,
+  createdAt,
   originKind,
   initiator,
   mentions,
@@ -461,6 +465,7 @@ function UserConversationMessage({
             mobileActionDisplay={mobileActionDisplay}
             addToChatAttachments={addToChatAttachments}
             copyImageUrl={attachmentItems.imageItems[0]?.src}
+            createdAt={createdAt}
             onAddToChat={onAddToChat}
             onEdit={onEdit}
             pluginActions={pluginActions}
@@ -474,6 +479,7 @@ function UserConversationMessage({
 function AssistantConversationMessage({
   addToChatAttachments,
   attachmentItems,
+  createdAt,
   id,
   onAddToChat,
   onFork,
@@ -622,6 +628,7 @@ function AssistantConversationMessage({
           mobileActionDisplay={mobileActionDisplay}
           addToChatAttachments={addToChatAttachments}
           copyImageUrl={attachmentItems.imageItems[0]?.src}
+          createdAt={createdAt}
           onAddToChat={onAddToChat}
           onFork={onFork}
           onSendToMain={onSendToMain}
@@ -663,6 +670,7 @@ export function ConversationMessageContent(
       <UserConversationMessage
         addToChatAttachments={addToChatAttachments}
         attachmentItems={attachmentItems}
+        createdAt={props.createdAt}
         originKind={props.originKind}
         pluginActions={props.pluginActions}
         initiator={props.initiator}
@@ -694,6 +702,7 @@ export function ConversationMessageContent(
     <AssistantConversationMessage
       addToChatAttachments={addToChatAttachments}
       attachmentItems={attachmentItems}
+      createdAt={props.createdAt}
       id={props.id}
       pluginActions={props.pluginActions}
       onAddToChat={props.onAddToChat}

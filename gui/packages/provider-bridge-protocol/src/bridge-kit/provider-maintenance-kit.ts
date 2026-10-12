@@ -13,6 +13,8 @@ import type {
   ProviderInstallationVerification,
 } from "../provider-maintenance.js";
 
+export { findCliExecutable } from "@cloudroom/process-utils";
+
 const execFileAsync = promisify(execFile);
 
 const CLI_PROBE_TIMEOUT_MS = 5_000;

@@ -116,6 +116,33 @@ export function getSidebarThreadNavigationTargets(
 
 const MAX_REVEAL_FRAMES = 30;
 
+const MAX_STICKY_ADJUSTMENTS = 10;
+
+function getStickyTierOverlap(root: HTMLElement, row: HTMLElement): number {
+  const { top: rowTop, bottom: rowBottom } = row.getBoundingClientRect();
+  let coveredBottom = rowTop;
+  for (const tier of root.querySelectorAll("[data-sidebar-sticky-tier]")) {
+    if (tier.contains(row)) continue;
+    const rect = tier.getBoundingClientRect();
+    const shield = parseFloat(getComputedStyle(tier, "::after").height) || 0;
+    if (rect.top >= rowBottom || rect.bottom + shield <= rowTop) continue;
+    coveredBottom = Math.max(coveredBottom, rect.bottom + shield);
+  }
+  return coveredBottom - rowTop;
+}
+
+function scrollRowBelowStickyTiers(root: HTMLElement, row: HTMLElement): void {
+  const scroller = row.closest('[data-sidebar="content"]');
+  if (!scroller) return;
+  for (let attempt = 0; attempt < MAX_STICKY_ADJUSTMENTS; attempt++) {
+    const overlap = getStickyTierOverlap(root, row);
+    if (overlap <= 0.5) return;
+    const scrollTop = scroller.scrollTop;
+    scroller.scrollTop = scrollTop - overlap;
+    if (scroller.scrollTop === scrollTop) return;
+  }
+}
+
 export function revealSidebarThread(
   root: HTMLElement | null,
   threadId: string,
@@ -129,6 +156,7 @@ export function revealSidebarThread(
   ].find((element) => element.dataset.sidebarThreadId === threadId);
   if (row) {
     row.scrollIntoView({ block: "nearest" });
+    scrollRowBelowStickyTiers(root, row);
     return;
   }
   const placeholder = [

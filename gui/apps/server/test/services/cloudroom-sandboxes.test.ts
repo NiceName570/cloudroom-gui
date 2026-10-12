@@ -301,3 +301,24 @@ it("sends a new thread's first message before its project copy starts, so a slow
     await rm(folder, { recursive: true, force: true });
   }
 });
+
+it("tells the user to remove forced API login when Codex refuses ChatGPT sign-in", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "codex-forced-api-"));
+  const path = process.env.PATH, codexHome = process.env.CODEX_HOME;
+  try {
+    // Same output and exit code as the real `codex login` with `forced_login_method = "api"`.
+    await writeFile(join(dir, "codex"), "#!/bin/sh\necho 'ChatGPT login is disabled. Use API key login instead.' >&2\nexit 1\n", { mode: 0o755 });
+    process.env.PATH = `${dir}:${path}`;
+    process.env.CODEX_HOME = dir;
+    const { macCodexLogin, startMacCodexLogin } = await import("../../src/services/cloudroom/sandboxes.js");
+    const run = startMacCodexLogin();
+    await waitFor(() => run.done, "codex login exit");
+    expect(run.error).toContain('Remove `forced_login_method = "api"`');
+    expect(run.error).toContain(join(dir, "config.toml"));
+    macCodexLogin();
+  } finally {
+    process.env.PATH = path;
+    if (codexHome === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = codexHome;
+    await rm(dir, { recursive: true, force: true });
+  }
+});

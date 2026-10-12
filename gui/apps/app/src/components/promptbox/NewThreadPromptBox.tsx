@@ -45,6 +45,7 @@ import {
 import {
   CLOUDROOM_CLOUD_PRIMARY,
   CLOUDROOM_LOCAL_PRIMARY,
+  CLOUDROOM_LOCAL_WORKTREE,
 } from "@/lib/cloudroom-environment-label";
 import { usePromptModePermissionDisplay } from "@/components/promptbox/usePromptModePermissionDisplay";
 import { usePromptVoice } from "@/components/promptbox/usePromptVoice";
@@ -171,17 +172,29 @@ function promptLocationCommands(
       : environment.providersByHostId === undefined
         ? environment.providers
         : environment.providersByHostId.get(hostId);
-  const localPrimary = hostProviders?.find(
-    (provider) =>
-      provider.id ===
-        (projectless ? "personal-workspace" : "project-checkout") &&
-      provider.availability?.status !== "unavailable",
+  const availableProvider = (id: string) =>
+    hostProviders?.find(
+      (provider) =>
+        provider.id === id && provider.availability?.status !== "unavailable",
+    );
+  const localPrimary = availableProvider(
+    projectless ? "personal-workspace" : "project-checkout",
   );
+  const localWorktree = projectless
+    ? undefined
+    : availableProvider("git-worktree");
   if (hostId !== null && localPrimary && onSelectProvider) {
     commands.push({
       name: "local",
       description: `Switch to ${CLOUDROOM_LOCAL_PRIMARY}`,
       onSelect: () => onSelectProvider(localPrimary, hostId),
+    });
+  }
+  if (hostId !== null && localWorktree && onSelectProvider) {
+    commands.push({
+      name: "worktree",
+      description: `Switch to ${CLOUDROOM_LOCAL_WORKTREE}`,
+      onSelect: () => onSelectProvider(localWorktree, hostId),
     });
   }
   if (cloud.unavailableReason === null) {

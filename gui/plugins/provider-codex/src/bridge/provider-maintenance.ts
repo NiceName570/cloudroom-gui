@@ -35,6 +35,10 @@ const CODEX_REWIND_MINIMUM_SUPPORTED_VERSION = "0.143.0";
 const CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
 const USAGE_FETCH_TIMEOUT_MS = 15_000;
 const CODEX_NPM_PACKAGE = "@openai/codex";
+// OpenAI's official installer, run the way `codex update` runs it. It needs no Node, never
+// prompts, and installs to ~/.codex/packages/standalone, which Cloudroom then prefers.
+const CODEX_OFFICIAL_INSTALL =
+  "curl -fsSL https://chatgpt.com/codex/install.sh | CODEX_NON_INTERACTIVE=1 sh";
 
 function fetchCodexUsage(headers: Headers): Promise<Response> {
   return fetchWithProxyFallback((init) =>
@@ -216,6 +220,15 @@ function buildCodexProviderInstallationRun(
         ? npmGlobalInstallCommand(CODEX_NPM_PACKAGE)
         : codexUpdateCommand(status.executablePath ?? "codex", npmPrefix),
     verification: installationVerification(status, action),
+    ...(process.platform === "win32"
+      ? {}
+      : {
+          fallback: {
+            command: "sh",
+            args: ["-c", CODEX_OFFICIAL_INSTALL],
+            displayCommand: CODEX_OFFICIAL_INSTALL,
+          },
+        }),
   };
 }
 

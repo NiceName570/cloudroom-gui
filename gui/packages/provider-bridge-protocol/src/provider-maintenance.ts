@@ -215,6 +215,8 @@ export const providerInstallationRunResultSchema = z.discriminatedUnion(
         available: z.literal(true),
         command: providerInstallationCommandSchema,
         verification: providerInstallationVerificationSchema,
+        /** Runs only when `command` fails or doesn't verify, e.g. a vendor's own installer. */
+        fallback: providerInstallationCommandSchema.optional(),
       })
       .passthrough(),
   ],

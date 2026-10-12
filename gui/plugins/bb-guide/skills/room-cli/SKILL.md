@@ -31,6 +31,8 @@ room-cli thread update THREAD --title "New title"
 room-cli thread archive THREAD
 ```
 
+Make a thread a child with `room-cli thread update THREAD --parent-thread PARENT` (or `--self` as the child), or top-level with `--clear-parent-thread`. Unarchiving a child makes it top-level, so its parent stops getting its updates. Re-link it with `--parent-thread`.
+
 "Open" or "active" threads means threads with `archivedAt: null`. An archived thread is never open or active, whatever its `status` says. `thread list` shows open threads only; `--archived` shows only archived ones, and `--include-archived` shows both.
 
 `--self` uses `ROOM_THREAD_ID` where supported. Thread IDs select Local or Cloud execution; connection settings still point to the same GUI backend.

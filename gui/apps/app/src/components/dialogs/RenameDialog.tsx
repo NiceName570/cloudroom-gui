@@ -11,10 +11,9 @@ import {
 import { Button } from "@cloudroom/shared-ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from "@cloudroom/shared-ui/dialog";
 import { Input } from "@cloudroom/shared-ui/input";
@@ -68,6 +67,7 @@ export function RenameDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={shellClassName}
+        hideCloseButton
         onOpenAutoFocus={handleOpenAutoFocus}
         onAfterCloseAutoFocus={handleAfterCloseAutoFocus}
       >
@@ -126,12 +126,12 @@ export function RenameDialogContent({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle>Rename {entityLabel}</DialogTitle>
-        <DialogDescription>
-          Choose a new name for this {entityLabel}.
-        </DialogDescription>
-      </DialogHeader>
+      <DialogTitle className="text-[13px] font-medium text-muted-foreground">
+        Rename {entityLabel}
+      </DialogTitle>
+      <DialogDescription className="sr-only">
+        Enter a new {entityLabel} name.
+      </DialogDescription>
       <form
         className={compact ? "space-y-3" : "space-y-4"}
         onSubmit={handleSubmit}
@@ -141,6 +141,7 @@ export function RenameDialogContent({
             ref={inputRef}
             id={inputId}
             aria-label={`${capitalize(entityLabel)} name`}
+            className="h-auto rounded-none border-0 border-b-2 px-0 pb-2 text-lg font-medium tracking-tight [border-image:linear-gradient(90deg,var(--primary)_60%,transparent)_1] focus-visible:ring-0"
             value={nextName}
             placeholder={placeholder}
             maxLength={maxLength?.limit}
@@ -158,21 +159,44 @@ export function RenameDialogContent({
             <p className="text-sm text-destructive">{displayedErrorMessage}</p>
           ) : null}
         </div>
-        <DialogFooter>
+        <div className="flex items-center gap-2">
+          <span className="mr-auto hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
+            <kbd className="rounded border border-border px-1.5 py-0.5 font-sans">
+              ↵
+            </kbd>
+            to save
+          </span>
           {clearAction ? (
             <Button
               type="button"
               variant="outline"
+              size="sm"
+              className="rounded-full px-4 text-[13px]"
               disabled={pending}
               onClick={clearAction.onClear}
             >
               {clearAction.label}
             </Button>
           ) : null}
-          <Button type="submit" disabled={pending}>
-            Rename {entityLabel}
+          <DialogClose asChild>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="rounded-full px-4 text-[13px]"
+            >
+              Cancel
+            </Button>
+          </DialogClose>
+          <Button
+            type="submit"
+            size="sm"
+            className="rounded-full border-0 px-4 text-[13px] font-semibold"
+            disabled={pending}
+          >
+            Save
           </Button>
-        </DialogFooter>
+        </div>
       </form>
     </>
   );

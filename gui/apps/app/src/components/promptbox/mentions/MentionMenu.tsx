@@ -56,7 +56,7 @@ export interface ModelShortcutCommandSuggestion {
 
 export interface LocationCommandSuggestion {
   kind: "location";
-  name: "local" | "cloud";
+  name: "local" | "worktree" | "cloud";
   description: string;
 }
 

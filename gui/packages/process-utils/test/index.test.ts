@@ -1,10 +1,18 @@
 import { once } from "node:events";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
+  findCliExecutable,
   installSafeProcessDiagnostics,
+  officialCodexPath,
   resolveContainedPath,
   sanitizeInheritedChildProcessEnv,
   spawnPortableOutputProcess,
@@ -335,5 +343,18 @@ describe("process utils", () => {
       PATH: "/bin",
     });
     expect(env).toEqual(originalEnv);
+  });
+
+  it("prefers OpenAI's official Codex over a codex on PATH", () => {
+    const home = mkdtempSync(join(tmpdir(), "codex-pick-"));
+    const pathCodex = join(home, "bin", "codex");
+    mkdirSync(join(home, "bin"));
+    writeFileSync(pathCodex, "", { mode: 0o755 });
+    const env = { HOME: home, PATH: join(home, "bin") };
+    expect(findCliExecutable("codex", env)).toBe(pathCodex);
+    const official = officialCodexPath(env);
+    mkdirSync(join(official, ".."), { recursive: true });
+    writeFileSync(official, "", { mode: 0o755 });
+    expect(findCliExecutable("codex", env)).toBe(official);
   });
 });

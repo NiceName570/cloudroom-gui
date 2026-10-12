@@ -2,6 +2,18 @@
 
 Also on [cloudroom.dev/changelog](https://www.cloudroom.dev/changelog).
 
+## 100
+
+Hermes in Cloud, smoother setup (2026-10-11)
+
+### Changes
+
+- Hermes Agent now runs in Cloud threads, and Cursor, opencode, and omp are found right after you install them.
+- Importing your old chats no longer slows down your Mac. Agents start only when you send a message.
+- Sign in to MCP servers once in Cloud threads, and Codex sign-in shows the real error when it fails.
+- New /worktree command, a sidebar grouped by agent, and click any inline code to copy it.
+- Fixes for Claude sign-in in Settings, file links in Cloud threads, and cloud automations. Security fixes.
+
 ## 99
 
 Cloud automations and a cleaner composer (2026-10-10)

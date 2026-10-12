@@ -21,6 +21,7 @@ import { exportableChats, exportChats } from "./chat-export.js";
 import { copyToMac, openOnMac, teleportingToLocal, teleportToLocal } from "./teleport-local.js";
 import { cloudEnvironmentRequestSchema, macMcpServers, macSkills, macVariables, sandboxThread, type CloudEnvironmentRequest } from "./sandboxes.js";
 import { CloudroomError } from "./client.js";
+import { finishMcpSignIn, isRemoteMcp, startMcpSignIn } from "./mcp-login.js";
 import { archiveThreadAndChildren } from "../threads/thread-archive.js";
 import { queueChildThreadTurnNotificationBestEffort } from "../threads/child-thread-notifications.js";
 import { reportBug } from "./bug-reports.js";
@@ -255,7 +256,34 @@ export function installCloudroomRoutes(app: Hono, deps: AppDeps): void {
     return context.json(await skillList());
   });
   // MCP servers from this Mac. The Cloud environment answer says which are in the cloud; their keys go straight to the website.
-  app.get("/api/v1/cloudroom/account/mcp", async (context) => context.json({ servers: (await macMcpServers()).map(({ name, server }) => ({ name, macOnly: !server })) }));
+  // `signIn` marks cloud servers that use OAuth: "needed" until the user signs in once for the cloud, then "done".
+  app.get("/api/v1/cloudroom/account/mcp", async (context) => {
+    const servers = await macMcpServers();
+    const signIns = await cloudroom(deps).sandboxes.mcpSignIns(servers).catch((): Record<string, "needed" | "done"> => ({}));
+    return context.json({ servers: servers.map(({ name, server }) => ({ name, macOnly: !server, ...(signIns[name] ? { signIn: signIns[name] } : {}) })) });
+  });
+  // The browser sign-in returns to this Mac; the tokens go straight to the website and never reach the app.
+  app.post("/api/v1/cloudroom/account/mcp/sign-in", async (context) => {
+    const { name } = z.object({ name: z.string().min(1) }).strict().parse(await context.req.json());
+    const server = (await macMcpServers()).find(entry => entry.name === name)?.server ?? null;
+    if (!isRemoteMcp(server)) throw new ApiError(400, "cloud_mcp", `${name} doesn't use a sign-in Cloudroom can do.`);
+    const redirect = `${new URL(context.req.url).origin}/api/v1/cloudroom/account/mcp/callback`;
+    return context.json({ url: await startMcpSignIn(name, server, redirect).catch((error: unknown) => {
+      throw new ApiError(error instanceof CloudroomError && error.status ? 400 : 503, "cloud_mcp", error instanceof Error ? error.message : String(error));
+    }) });
+  });
+  app.get("/api/v1/cloudroom/account/mcp/callback", async (context) => {
+    const escape = (text: string) => text.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
+    const page = (title: string, detail: string) => context.html(`<!doctype html><meta charset="utf-8"><title>${escape(title)}</title><body style="font:15px system-ui;margin:15vh auto;max-width:28rem;padding:0 1rem;text-align:center"><h1 style="font-size:20px">${escape(title)}</h1><p>${escape(detail)}</p></body>`);
+    try {
+      const { name, server, signIn } = await finishMcpSignIn(new URL(context.req.url).searchParams);
+      await cloudroom(deps).sandboxes.saveMcpSignIn(name, server, signIn);
+      return page(`Signed in to ${name}`, "Every cloud thread can use it now. You can close this tab.");
+    } catch (error) {
+      deps.logger.warn({ error: error instanceof Error ? error.message : String(error) }, "Cloud MCP sign-in failed");
+      return page("Sign-in didn't finish", `${error instanceof Error ? error.message : String(error)} Try again in Cloudroom.`);
+    }
+  });
   app.post("/api/v1/cloudroom/account/mcp", async (context) => {
     const { names, cloud } = z.object({ names: z.array(z.string().min(1)).min(1).max(50), cloud: z.boolean() }).strict().parse(await context.req.json());
     return context.json(await cloudroom(deps).sandboxes.setMacMcp(names, cloud).catch((error: unknown) => {
@@ -375,6 +403,9 @@ export function installCloudroomRoutes(app: Hono, deps: AppDeps): void {
   });
   const guard: MiddlewareHandler = async (context, next) => {
     if (["GET", "HEAD", "OPTIONS"].includes(context.req.method)) return next();
+    // This runs before publicApi's browser guard, and the Cloud handlers below answer on their own, so check here too.
+    const problem = browserRequestProblem(context, deps);
+    if (problem) return context.json({ message: "Use the local Cloudroom app or CLI." }, problem.status);
     const id = context.req.param("id");
     if (!id) return next();
     const thread = getThread(deps.db, id);
@@ -396,6 +427,7 @@ export function installCloudroomRoutes(app: Hono, deps: AppDeps): void {
     }
     if (["/tabs", "/read", "/unread", "/pin", "/unpin", "/pin-order"].includes(path)) return next();
     if (context.req.method === "POST" && ["/archive-all", "/unarchive"].includes(path)) return next();
+    if (context.req.method === "DELETE" && path === "") return next();
     if (context.req.method === "POST" && ["/send", "/queued-messages", "/stop", "/compact", "/edit-message"].includes(path)) return next();
     if (context.req.method === "PATCH" && /^\/queued-messages\/[^/]+$/.test(path)) return next();
     if (context.req.method === "DELETE" && /^\/queued-messages\/[^/]+$/.test(path)) return next();

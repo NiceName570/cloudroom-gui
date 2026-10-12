@@ -70,7 +70,7 @@ export function isRowExpandable(row: ThreadTimelineViewRow): boolean {
     case "step-summary":
       return row.children.length > 0;
     case "turn":
-      return true;
+      return row.summaryCount > 0 || (row.children?.length ?? 0) > 0;
     case "work":
       return isWorkRowExpandable(row);
     default:

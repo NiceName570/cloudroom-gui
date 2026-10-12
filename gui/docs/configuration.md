@@ -307,7 +307,7 @@ The "Collapse finished turns" switches in Settings → Providers choose, per
 provider, how a finished turn appears in the thread timeline. Collapsed, the
 turn's work folds into one "Worked for" row and the final answer stays
 visible. Flat, every step of the finished turn stays visible, as it was while
-the turn ran. Each provider declares its default (`completedTurnDisplay` on
+the turn ran, under a "Worked for" row that only shows the duration. Each provider declares its default (`completedTurnDisplay` on
 its registration): Claude Code defaults to flat, and every other first-party
 provider defaults to collapsed. Your choice is stored in
 `providerCompletedTurnDisplay`, a map of provider id to `collapse` or `flat`;
@@ -708,18 +708,20 @@ client wrote first, so a stale window cannot silently clobber a newer value.
 
 | Key                               | Value                                               |
 | --------------------------------- | --------------------------------------------------- |
-| `sidebar.organizationMode`        | `project`, `chronological`, or `machine`            |
+| `sidebar.organizationMode`        | `project`, `chronological`, `machine`, or `harness` |
 | `sidebar.chronologicalSort`       | `updated`, `created`, `alpha`, or `none`            |
 | `sidebar.sectionSorts`            | Sort per section id; falls back to the global sort  |
 | `sidebar.sectionOrder`            | Section id list for **By project**                  |
 | `sidebar.manualSectionOrder`      | Section id list for **Manually**                    |
 | `sidebar.machineSectionOrder`     | Section id list for **By machine**                  |
+| `sidebar.harnessSectionOrder`     | Section id list for **By harness**                  |
 | `sidebar.collapsedSections`       | Collapsed built-in sections (`pinned`, `threads`)   |
 | `sidebar.collapsedProjects`       | Collapsed project ids                               |
 | `sidebar.collapsedThreads`        | Thread ids whose children are collapsed             |
 | `sidebar.collapsedEnvironments`   | Collapsed environment ids                           |
 | `sidebar.collapsedThreadSections` | Collapsed thread section ids                        |
 | `sidebar.collapsedMachines`       | Collapsed machine ids                               |
+| `sidebar.collapsedHarnesses`      | Collapsed harness provider ids                      |
 | `sidebar.footerOrder`             | Footer action order                                 |
 | `sidebar.hiddenFooterItems`       | Footer actions moved into More                      |
 | `sidebar.pluginPanelOrder`        | Navigation entry order                              |

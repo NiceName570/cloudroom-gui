@@ -298,7 +298,7 @@ export function ThreadActionsProvider({
       const sectionTargets = getSidebarThreadNavigationTargets(
         document
           .querySelector(`a[data-sidebar-thread-id="${thread.id}"]`)
-          ?.closest<HTMLElement>("[data-sidebar-sticky-group]") ?? null,
+          ?.closest<HTMLElement>("[data-sidebar-sticky-section]") ?? null,
       );
       archiveThreadAndChildrenMutateAsync({ id: thread.id }).then(
         (response) => {

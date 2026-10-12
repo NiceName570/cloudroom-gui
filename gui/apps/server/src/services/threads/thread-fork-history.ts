@@ -1,21 +1,37 @@
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import {
   copyStoredThreadEventsInTransaction,
+  createEventId,
+  events,
   findLastCompletedRootStoredTurn,
   findLastRootStoredTurnStarted,
   listStoredEventRows,
   listStoredTurnCompletedRowsByTurnIds,
+  type DbQueryConnection,
   type StoredEventRow,
 } from "@cloudroom/db";
-import type { Thread, ThreadEvent, ThreadEventType } from "@cloudroom/domain";
+import {
+  THREAD_CONTEXT_CLEAR_OPERATION,
+  THREAD_HARNESS_SWITCH_OPERATION,
+  THREAD_IMPORT_OPERATION,
+  threadScope,
+  type Thread,
+  type ThreadEvent,
+  type ThreadEventType,
+} from "@cloudroom/domain";
 import type { AppDeps } from "../../types.js";
 import { ApiError } from "../../errors.js";
 import { parseStoredEvent } from "./thread-data.js";
 import {
+  appendThreadEventInTransaction,
   getLastProviderThreadId,
   parseStoredTurnRequestEvent,
 } from "./thread-events.js";
 import { resolveTurnProviderCheckpointId } from "./thread-edit-message.js";
-import type { ThreadForkDescriptor } from "./thread-startup-store.js";
+import {
+  threadForkDescriptorSchema,
+  type ThreadForkDescriptor,
+} from "./thread-startup-store.js";
 
 export type ThreadForkHistory =
   | { kind: "thread"; sourceThreadId: string; endSequence: number }
@@ -154,10 +170,10 @@ export function resolveThreadForkPoint(
       sourceThread: args.sourceThread,
     });
   }
-  const sourceProviderThreadId = getLastProviderThreadId(
-    deps,
-    args.sourceThread.id,
-  );
+  const sourceProviderThreadId =
+    getLastProviderThreadId(deps, args.sourceThread.id) ??
+    pendingImportFork(deps.db, args.sourceThread.id)?.sourceProviderThreadId ??
+    null;
   if (sourceProviderThreadId === null) {
     return null;
   }
@@ -291,4 +307,64 @@ export function copyForkSourceHistory(
   deps.hub.notifyThread(args.fork.id, ["events-appended"], {
     eventTypes: [...new Set(rows.map((row) => row.type))],
   });
+}
+
+export function recordImportFork(
+  deps: Pick<AppDeps, "db">,
+  thread: Pick<Thread, "environmentId" | "id">,
+  sourceProviderThreadId: string,
+): void {
+  deps.db.transaction(
+    (tx) =>
+      appendThreadEventInTransaction(tx, {
+        threadId: thread.id,
+        environmentId: thread.environmentId,
+        type: "system/operation",
+        scope: threadScope(),
+        data: {
+          operation: THREAD_IMPORT_OPERATION,
+          operationId: createEventId(),
+          status: "completed",
+          message: `Imported from session ${sourceProviderThreadId}.`,
+          metadata: { sourceProviderThreadId },
+        },
+      }),
+    { behavior: "immediate" },
+  );
+}
+
+export function pendingImportFork(
+  db: DbQueryConnection,
+  threadId: string,
+): ThreadForkDescriptor | null {
+  const row = db
+    .select({ type: events.type, data: events.data })
+    .from(events)
+    .where(
+      and(
+        eq(events.threadId, threadId),
+        or(
+          eq(events.type, "turn/started"),
+          and(
+            eq(events.type, "system/error"),
+            sql`json_extract(${events.data}, '$.code') = 'thread_command_failed'`,
+          ),
+          and(
+            eq(events.type, "system/operation"),
+            sql`json_extract(${events.data}, '$.operation') IN (${THREAD_IMPORT_OPERATION}, ${THREAD_CONTEXT_CLEAR_OPERATION}, ${THREAD_HARNESS_SWITCH_OPERATION})`,
+          ),
+        ),
+      ),
+    )
+    .orderBy(desc(events.sequence))
+    .limit(1)
+    .get();
+  if (row?.type !== "system/operation") return null;
+  const data = JSON.parse(row.data) as {
+    operation?: unknown;
+    metadata?: unknown;
+  };
+  if (data.operation !== THREAD_IMPORT_OPERATION) return null;
+  const fork = threadForkDescriptorSchema.safeParse(data.metadata);
+  return fork.success ? fork.data : null;
 }
