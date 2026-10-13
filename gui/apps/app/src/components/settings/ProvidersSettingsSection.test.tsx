@@ -7,6 +7,7 @@ import {
   screen,
   within,
 } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ProviderInfo } from "@cloudroom/domain";
@@ -28,6 +29,10 @@ vi.mock("@/hooks/queries/system-queries", () => ({
   useSystemConfig: () => ({ data: undefined }),
   useSystemProviderStates: () => ({ data: undefined, refetch: vi.fn() }),
   useSystemProviders: () => ({ data: mocks.providers, isPending: false }),
+}));
+
+vi.mock("@/hooks/queries/cloudroom-queries", () => ({
+  useCloudroomAccount: () => ({ data: undefined }),
 }));
 
 vi.mock("@/hooks/useHostDaemon", () => ({
@@ -54,6 +59,12 @@ function provider(id: string, displayName: string): ProviderInfo {
 
 afterEach(cleanup);
 
+function withQueryClient({ children }: { children: ReactNode }) {
+  return (
+    <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
+  );
+}
+
 describe("ProvidersSettingsSection", () => {
   it("shows reorder handles and writes the default as a user setting", () => {
     mocks.providers = [
@@ -68,6 +79,7 @@ describe("ProvidersSettingsSection", () => {
         generalSettings={defaultAppSettings}
         onGeneralSettingsChange={onChange}
       />,
+      { wrapper: withQueryClient },
     );
 
     const providersSection = screen
@@ -110,6 +122,7 @@ describe("ProvidersSettingsSection", () => {
         generalSettings={{ ...defaultAppSettings, defaultProviderId: "alpha" }}
         onGeneralSettingsChange={vi.fn()}
       />,
+      { wrapper: withQueryClient },
     );
     expect(screen.getByText("Unavailable")).toBeTruthy();
     expect(

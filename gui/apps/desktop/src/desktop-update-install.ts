@@ -22,21 +22,28 @@ export function startIdleInstall(args: IdleInstallArgs): {
   const now = args.now ?? Date.now;
   let busyAt = now();
   let installing = false;
+  // A slow server can make a check outlast the 15 s interval; overlapping checks would install twice.
+  let checking = false;
   async function check(): Promise<void> {
-    if (installing) return;
-    if (!args.isUpdateDownloaded()) {
-      busyAt = now();
-      return;
+    if (installing || checking) return;
+    checking = true;
+    try {
+      if (!args.isUpdateDownloaded()) {
+        busyAt = now();
+        return;
+      }
+      const running = await args.hasRunningThreads().catch(() => true);
+      if (running) busyAt = now();
+      const installAt = running
+        ? null
+        : Math.max(busyAt, now() - args.systemIdleSeconds() * 1000) +
+          IDLE_INSTALL_AFTER_MS;
+      const requested = (await args.report?.(installAt).catch(() => false)) ?? false;
+      if (!requested && (installAt === null || now() < installAt)) return;
+      installing = true;
+    } finally {
+      checking = false;
     }
-    const running = await args.hasRunningThreads().catch(() => true);
-    if (running) busyAt = now();
-    const installAt = running
-      ? null
-      : Math.max(busyAt, now() - args.systemIdleSeconds() * 1000) +
-        IDLE_INSTALL_AFTER_MS;
-    const requested = (await args.report?.(installAt).catch(() => false)) ?? false;
-    if (!requested && (installAt === null || now() < installAt)) return;
-    installing = true;
     await args.install();
   }
   const timer = setInterval(() => void check(), IDLE_CHECK_MS);

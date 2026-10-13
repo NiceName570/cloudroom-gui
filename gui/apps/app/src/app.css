@@ -764,6 +764,11 @@
       transparent
     );
   }
+
+  .fade-clip-bottom {
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 2rem), transparent);
+    mask-image: linear-gradient(#000 calc(100% - 2rem), transparent);
+  }
 }
 
 /* Sweep the purple gradient across the `ultracode` glyphs. */

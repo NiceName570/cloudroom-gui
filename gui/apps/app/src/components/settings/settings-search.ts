@@ -102,6 +102,7 @@ const SETTINGS_SEARCH_ENTRIES: readonly SettingsSearchEntry[] = [
   ...entries("appearance", "Appearance", [
     ["Sidebar", "thread list"],
     ["Navigation", "sidebar"],
+    ["Harness icons", "sidebar claude code codex provider agent logo"],
     ["Source code", "syntax highlighting renderer"],
     ["Diffs", "changes renderer"],
     ["Theme", "dark mode light mode system color scheme"],
@@ -125,8 +126,8 @@ const SETTINGS_SEARCH_ENTRIES: readonly SettingsSearchEntry[] = [
     })),
   ),
   ...entries("providers", undefined, [
-    ["Providers", "claude code codex pi acp cli install harness agents"],
-    ["More agents", "install add agent cli harness provider"],
+    ["Providers", "claude code codex pi acp cli install harness agents version update auto-update login log in connect cloud mac"],
+    ["Not installed", "install add agent cli harness provider"],
     ["Collapse finished turns", "timeline"],
   ]),
   ...entries("defaults", "Defaults", [
@@ -156,7 +157,6 @@ const SETTINGS_SEARCH_ENTRIES: readonly SettingsSearchEntry[] = [
     ["Plan & billing", "billing plan subscription invoices upgrade pro ultra payment"],
     ["Or connect your own Core", "self-hosted core url api token server"],
     ["Mac access", "cloud agents permission full read-only ask off"],
-    ["Agent logins", "codex cursor cloud login connection"],
     ["Machines", "mac computer devices rename"],
     ["Connection method", "ssh remote machine access"],
     ["Server address", "url host remote"],
@@ -164,7 +164,6 @@ const SETTINGS_SEARCH_ENTRIES: readonly SettingsSearchEntry[] = [
   ]),
   ...entries("updates", undefined, [
     ["Cloudroom daemon", "version update restart"],
-    ["Provider CLIs", "claude codex update version"],
     ["Machine updates", "update version"],
   ]),
   ...entries("marketplaces", undefined, [

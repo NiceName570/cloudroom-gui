@@ -187,7 +187,7 @@ export function registerCloudCommands(program: Command, getUrl: () => string): v
       if (!outputJson(options, { ok: true })) console.log(name === "logout" ? "Signed out of this app. Cloud agents keep running." : "Sign-in cancelled.");
     }));
   }
-  group.command("teleport <thread-id>").description("Move a local Codex, Pi, Claude Code, or Cursor thread to Cloud without changing its conversation. Checks first that Cloud can run the same model and effort. Use --to-local to bring a Cloud Codex, Pi, or Claude Code thread back to this Mac")
+  group.command("teleport <thread-id>").description("Move a local Codex, Pi, Claude Code, or opencode thread to Cloud without changing its conversation. Checks first that Cloud can run the same model and effort. Use --to-local to bring a Cloud Codex, Pi, Claude Code, opencode, or Cursor thread back to this Mac")
     .option("--to-local", "Move a Cloud thread back to this Mac with its conversation and code changes")
     .option("--cancel", "Cancel before cloud execution starts")
     .option("--status", "Read transfer progress without changing it")

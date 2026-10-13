@@ -5,8 +5,11 @@ import {
   ScriptAutomationDefinition,
   RunRow,
 } from "bb-plugin-automations/detail-view";
-import { OverviewRow } from "bb-plugin-automations/overview-view";
-import { CloudAutomationRows, type CloudAutomation } from "bb-plugin-automations/cloud-view";
+import {
+  CloudAutomationRow,
+  OverviewRow,
+} from "bb-plugin-automations/overview-view";
+import type { CloudAutomation } from "bb-plugin-automations/cloud-view";
 import type {
   AutomationResponse,
   AgentEnvironment,
@@ -329,6 +332,10 @@ export function OverviewRows() {
               <OverviewRow
                 automation={value}
                 project={project}
+                scriptAgents={undefined}
+                providers={[]}
+                showProject={false}
+                now={Date.now()}
                 onNavigate={noop}
                 onEnabledChange={async () => {}}
               />
@@ -338,12 +345,16 @@ export function OverviewRows() {
       ))}
       <StoryRow
         label="Script automation"
-        hint="Uses the script icon instead of the agent calendar icon. The schedule and toggle use the same row layout."
+        hint="Shows the agents the script starts, or Script when it starts none. The schedule and toggle use the same row layout."
       >
         <div className="w-full max-w-3xl">
           <OverviewRow
             automation={SCRIPT_AUTOMATION}
             project={{ id: "proj_personal", name: "Personal" }}
+            scriptAgents={[]}
+            providers={[]}
+            showProject
+            now={Date.now()}
             onNavigate={noop}
             onEnabledChange={async () => {}}
           />
@@ -606,16 +617,18 @@ const cloudAutomation = (overrides: Partial<CloudAutomation>): CloudAutomation =
 
 export const CloudAutomations = () => (
   <StoryCard>
-    <CloudAutomationRows
-      rows={[
-        cloudAutomation({}),
-        cloudAutomation({ id: "b2", name: "Refresh agent context", cron: "*/30 * * * *", timezone: "UTC", next_run_at: "2027-01-15T09:30:00.000Z", runs: 41 }),
-        cloudAutomation({ id: "c3", name: "Nightly test run", cron: "0 2 * * *", enabled: false, next_run_at: null, last_error: "Paused after 3 failed runs. Last error: The Cloud thread did not start." }),
-      ]}
-      onOpen={noop}
-      onRun={noop}
-      onDelete={noop}
-      onEnabledChange={noop}
-    />
+    {[
+      cloudAutomation({}),
+      cloudAutomation({ id: "b2", name: "Refresh agent context", cron: "*/30 * * * *", timezone: "UTC", next_run_at: "2027-01-15T09:30:00.000Z", runs: 41 }),
+      cloudAutomation({ id: "c3", name: "Nightly test run", cron: "0 2 * * *", enabled: false, next_run_at: null, last_error: "Paused after 3 failed runs. Last error: The Cloud thread did not start." }),
+    ].map((automation) => (
+      <CloudAutomationRow
+        key={automation.id}
+        automation={automation}
+        providers={[]}
+        now={now}
+        actions={{ onOpen: noop, onRun: noop, onDelete: noop, onEnabledChange: noop }}
+      />
+    ))}
   </StoryCard>
 );

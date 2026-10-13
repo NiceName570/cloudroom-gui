@@ -89,6 +89,14 @@ export function Onboarding() {
 function Setup({ locked, close }: { locked: boolean; close: () => void }) {
   const progress = useSetupProgress();
   const { done, account } = progress;
+  const [choices, setChoices] = useState({ macAccess: true, copyLogins: true });
+  const saveMacAccess = useSetMacAccess();
+  const saveCopyLogins = useSetCopyLogins();
+  const leave = () => {
+    if (account.data?.account && account.data.macAccess == null) saveMacAccess.mutate(choices.macAccess);
+    if (account.data?.account && account.data.copyLogins == null) saveCopyLogins.mutate(choices.copyLogins);
+    close();
+  };
   useFirstAgentDefault(progress.agents);
   const first = done.findIndex((isDone) => !isDone);
   const [picked, setPicked] = useState<number | null>(null);
@@ -191,7 +199,7 @@ function Setup({ locked, close }: { locked: boolean; close: () => void }) {
         </aside>
         <main className="relative flex min-w-0 flex-1 overflow-y-auto px-[110px] py-10">
           {!locked && (
-            <button type="button" onClick={() => { track(STEP_IDS[step] ?? "project", "closed"); close(); }} className={cn("absolute top-5 right-6 flex items-center gap-1.5 text-[13px] text-(--ob-muted) hover:text-(--ob-ink)", MACOS_APP_REGION_NO_DRAG_CLASS)}>
+            <button type="button" onClick={() => { track(STEP_IDS[step] ?? "project", "closed"); leave(); }} className={cn("absolute top-5 right-6 flex items-center gap-1.5 text-[13px] text-(--ob-muted) hover:text-(--ob-ink)", MACOS_APP_REGION_NO_DRAG_CLASS)}>
               Skip setup
               <Icon name="X" className="size-3" aria-hidden />
             </button>
@@ -200,9 +208,9 @@ function Setup({ locked, close }: { locked: boolean; close: () => void }) {
             {step === 1 && stamped ? <TickStamp key={`${claude}-${codex}`} /> : <BbLogo className="mb-6 size-[72px] -rotate-[5deg]" />}
             <p className="font-serif text-base text-(--ob-muted) italic">Step {step + 1} of 4</p>
             {step === 0 && <AccountStep email={account.data?.account?.email ?? null} signingIn={account.data?.signingIn === true} next={next} />}
-            {step === 1 && <AgentStep progress={progress} next={next} stamped={stamped} left={countdown?.left ?? null} />}
+            {step === 1 && <AgentStep progress={progress} next={next} stamped={stamped} left={countdown?.left ?? null} choices={choices} setChoices={setChoices} />}
             {step === 2 && <GithubStep progress={progress} next={next} />}
-            {step === 3 && <ProjectStep close={close} />}
+            {step === 3 && <ProjectStep close={leave} />}
           </div>
         </main>
       </div>
@@ -346,7 +354,8 @@ function AccountStep({ email, signingIn, next }: { email: string | null; signing
   );
 }
 
-function AgentStep({ progress, next, stamped, left }: { progress: ReturnType<typeof useSetupProgress>; next: () => void; stamped: boolean; left: number | null }) {
+type Choices = { macAccess: boolean; copyLogins: boolean };
+function AgentStep({ progress, next, stamped, left, choices, setChoices }: { progress: ReturnType<typeof useSetupProgress>; next: () => void; stamped: boolean; left: number | null; choices: Choices; setChoices: (choices: Choices) => void }) {
   const { account, agents, codex, ready, offline } = progress;
   const defaultAgent = useSystemConfig().data?.generalSettings.defaultProviderId;
   const { localHostId } = useHostDaemon();
@@ -368,8 +377,7 @@ function AgentStep({ progress, next, stamped, left }: { progress: ReturnType<typ
   const saveMacAccess = useSetMacAccess();
   const saveCopyLogins = useSetCopyLogins();
   const [ask] = useState(() => ({ mac: account.data?.macAccess == null, logins: account.data?.copyLogins == null }));
-  const [macAccess, setMacAccess] = useState(true);
-  const [copyLogins, setCopyLogins] = useState(true);
+  const { macAccess, copyLogins } = choices;
   // Save whenever a box differs from the saved choice, so re-checking it after a Connect works.
   const saveChoices = () =>
     Promise.all([
@@ -417,10 +425,11 @@ function AgentStep({ progress, next, stamped, left }: { progress: ReturnType<typ
         </Card>
       </div>
       {offline && <CloudOffline />}
-      {(ask.mac || ask.logins) && (
-        <div className="mt-5 flex flex-col gap-2 text-[13px]">
-          {ask.logins && <Choice checked={copyLogins} onChange={setCopyLogins} label="Copy my logins to the cloud" detail="Agent logins, API keys, and model providers." />}
-          {ask.mac && <Choice checked={macAccess} onChange={setMacAccess} label="Let cloud agents use this computer" detail="Far more powerful agents. Turn off anytime." />}
+      {/* Hidden until an agent connects, so the choices don't distract from Connect. */}
+      {(agents.claude || agents.codex) && (ask.mac || ask.logins) && (
+        <div className="mt-4 flex gap-6 text-[12.5px] text-(--ob-muted) duration-300 animate-in fade-in-0">
+          {ask.logins && <Choice checked={copyLogins} onChange={(value) => setChoices({ ...choices, copyLogins: value })} label="Copy logins to the cloud" detail="Agent logins, API keys, and model providers." />}
+          {ask.mac && <Choice checked={macAccess} onChange={(value) => setChoices({ ...choices, macAccess: value })} label="Let cloud agents use this computer" detail="Far more powerful agents. Turn off anytime." />}
         </div>
       )}
       <div className="mt-8 flex items-center gap-5">
@@ -468,10 +477,9 @@ function AgentLogo({ id, className }: { id: string; className: string }) {
 
 function Choice({ checked, onChange, label, detail }: { checked: boolean; onChange: (value: boolean) => void; label: string; detail: string }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2.5">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="size-4 accent-(--ob-ink)" />
-      <span className="font-medium">{label}</span>
-      <span className="text-(--ob-muted)">{detail}</span>
+    <label title={detail} className="flex cursor-pointer items-center gap-2 hover:text-(--ob-ink)">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="size-3.5 accent-(--ob-muted)" />
+      {label}
     </label>
   );
 }

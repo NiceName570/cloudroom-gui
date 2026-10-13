@@ -4,14 +4,13 @@ import { z } from "zod";
 import { getProject, type DbConnection } from "@cloudroom/db";
 import type { AppDeps } from "../../types.js";
 import { ApiError } from "../../errors.js";
-import { cloudroom } from "./commands.js";
+import { cloudroom, configuredWebsite, trustedWebsite } from "./commands.js";
 import { cancelGithubLogin } from "./github-login.js";
 import { macAccess } from "./previews.js";
 import { hasMacCodexLogin } from "./sandboxes.js";
 import { copyLogins } from "./sync.js";
 import { linkInstall, reportSignInFailed } from "./setup-telemetry.js";
 
-const website = "https://www.cloudroom.dev";
 // Keep the loopback listener open while a VM is provisioned. The one-use pairing code expires separately after five minutes.
 export const pendingLoginTimeoutMs = 30 * 60_000;
 const signInSchema = z.object({ projectId: z.string().min(1).optional(), websiteUrl: z.string().url().optional(), provider: z.enum(["github", "google"]).optional() }).strict();
@@ -87,8 +86,8 @@ export class CloudroomAccountService {
   async signIn(raw: unknown): Promise<{ url: string }> {
     const input = signInSchema.parse(raw);
     if (input.projectId && !getProject(this.deps.db, input.projectId)) throw new ApiError(404, "project_not_found", "Project not found.");
-    const origin = new URL(input.websiteUrl ?? website);
-    if (origin.href !== `${origin.origin}/` || (origin.origin !== website && !(origin.protocol === "http:" && origin.hostname === "127.0.0.1" && origin.port))) throw new ApiError(400, "invalid_request", "Use the Cloudroom website or an explicit loopback development server.");
+    const origin = new URL(input.websiteUrl ?? configuredWebsite());
+    if (origin.href !== `${origin.origin}/` || !trustedWebsite(origin.origin)) throw new ApiError(400, "invalid_request", "Use the Cloudroom website or an explicit loopback development server.");
     this.cancel();
     const attempt = this.attempt;
     const state = randomBytes(32).toString("hex");

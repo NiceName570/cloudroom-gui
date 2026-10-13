@@ -424,10 +424,22 @@ export type AutomationRunRpcResponse = z.infer<
   typeof automationRunRpcResponseSchema
 >;
 
+export const automationAgentSummarySchema = z
+  .object({
+    providerId: z.string().nullable(),
+    model: z.string().nullable(),
+    reasoningLevel: z.string().nullable(),
+  })
+  .strict();
+export type AutomationAgentSummary = z.infer<
+  typeof automationAgentSummarySchema
+>;
+
 const automationsOverviewEntrySchema = z
   .object({
     automation: automationReadResultSchema,
     project: z.object({ id: z.string(), name: z.string() }).strict(),
+    scriptAgents: z.array(automationAgentSummarySchema).optional(),
   })
   .strict();
 export const automationsOverviewResponseSchema = z

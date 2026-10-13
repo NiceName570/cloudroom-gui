@@ -19,6 +19,7 @@ import type {
   AutomationsOverviewResponse,
 } from "@/src/rpc-types";
 import { AutomationDetailView } from "./detail-view";
+import { useCloudAutomations } from "./cloud-view";
 import {
   AutomationOverviewView,
   automationProjectLabel,
@@ -392,6 +393,7 @@ function OverviewView({
 }) {
   const navigate = useBbNavigate();
   const { entries, error, refetch } = useOverview();
+  const cloud = useCloudAutomations();
   const mutations = useMutations();
 
   const changeEnabled = useCallback(
@@ -426,6 +428,7 @@ function OverviewView({
       onCreateViaChat={createViaChat}
       activeMode={activeMode}
       onModeChange={onModeChange}
+      cloud={cloud}
     />
   );
 }
@@ -650,7 +653,7 @@ function AutomationsPanel({ subPath }: PluginNavPanelProps) {
   const navigate = useBbNavigate();
   const parsedRoute = useMemo(() => parseSubPath(subPath), [subPath]);
   const collectionMode: AutomationCollectionMode =
-    subPath === "browse" || subPath === "cloud" ? subPath : "installed";
+    subPath === "browse" ? "browse" : "installed";
   const openDetail = useCallback(
     (next: DetailRoute, options?: { editing?: boolean }) => {
       navigate.toPluginPanel(PANEL_PATH, {

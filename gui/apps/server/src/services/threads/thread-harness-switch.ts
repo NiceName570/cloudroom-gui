@@ -55,29 +55,31 @@ export async function switchThreadHarness(
 ): Promise<void> {
   const from = await withThreadContextClearGuard(threadId, async () => {
     const thread = requireSwitchableThread(deps, threadId);
-    const seed = await historySeed(deps, thread, target.providerId);
-    const record = (tx: DbTransaction) => {
-      appendThreadEventInTransaction(tx, {
-        threadId,
-        environmentId: thread.environmentId,
-        type: "system/operation",
-        scope: threadScope(),
-        data: {
-          operation: THREAD_HARNESS_SWITCH_OPERATION,
-          operationId: createEventId(),
-          status: "completed",
-          message: `Switched from ${thread.providerId} to ${target.providerId} (${target.model}).`,
-          metadata: {
-            from: thread.providerId,
-            to: target.providerId,
-            model: target.model,
-            seed,
+    const prepare = async () => {
+      const seed = await historySeed(deps, thread, target.providerId);
+      return (tx: DbTransaction) => {
+        appendThreadEventInTransaction(tx, {
+          threadId,
+          environmentId: thread.environmentId,
+          type: "system/operation",
+          scope: threadScope(),
+          data: {
+            operation: THREAD_HARNESS_SWITCH_OPERATION,
+            operationId: createEventId(),
+            status: "completed",
+            message: `Switched from ${thread.providerId} to ${target.providerId} (${target.model}).`,
+            metadata: {
+              from: thread.providerId,
+              to: target.providerId,
+              model: target.model,
+              seed,
+            },
           },
-        },
-      });
+        });
+      };
     };
     if (isCloudThread(thread)) {
-      await cloudroom(deps).switchHarness(thread, target, record);
+      await cloudroom(deps).switchHarness(thread, target, prepare);
       return thread;
     }
     const override = await resolveHarnessSwitchOverride(deps, thread, target);
@@ -86,6 +88,7 @@ export async function switchThreadHarness(
       : null;
     // Release the old harness's process before the thread points at the new one.
     await stopThreadForCurrentState(deps, thread, environment ?? null);
+    const record = await prepare();
     deps.db.transaction((tx) => {
       updateThread(tx, deps.hub, threadId, { providerId: target.providerId });
       setThreadExecutionOverride(tx, { threadId, ...override });

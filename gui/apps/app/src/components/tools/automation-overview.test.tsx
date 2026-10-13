@@ -10,6 +10,27 @@ import type {
   AutomationsOverviewResponse,
 } from "bb-plugin-automations/rpc-types";
 
+vi.mock("@get-bb/plugin-sdk/app", () => ({
+  experimental_ProviderIcon: ({ provider }: { provider: { id: string } }) => (
+    <span data-provider-icon={provider.id} />
+  ),
+  experimental_useProviders: () => ({
+    status: "ready",
+    providers: [
+      {
+        id: "claude",
+        displayName: "Claude Code",
+        reasoningLevels: [{ id: "medium", label: "Medium" }],
+      },
+      {
+        id: "codex",
+        displayName: "Codex",
+        reasoningLevels: [{ id: "max", label: "Max" }],
+      },
+    ],
+  }),
+}));
+
 function iconNames(element: HTMLElement): string[] {
   return [...element.querySelectorAll("[data-icon]")].map(
     (icon) => icon.getAttribute("data-icon") ?? "",
@@ -103,11 +124,34 @@ describe("AutomationOverviewView", () => {
       />,
     );
 
-    const rowTitles = Array.from(
-      container.querySelectorAll<HTMLElement>("[data-resource-row]"),
-      (row) => row.querySelector("button")?.textContent,
+    const rowTitles = () =>
+      Array.from(
+        container.querySelectorAll<HTMLElement>("[data-resource-row]"),
+        (row) => row.querySelector("button")?.textContent,
+      );
+    expect(rowTitles()).toEqual([
+      "Aardvark pending",
+      "Alpha active",
+      "Zulu active",
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: /Paused & finished/ }));
+    expect(rowTitles()).toEqual([
+      "Aardvark pending",
+      "Alpha active",
+      "Zulu active",
+      "Alpha inactive",
+      "Zulu inactive",
+      "Aardvark completed",
+    ]);
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Sort: Next run, ascending" }),
     );
-    expect(rowTitles).toEqual([
+    fireEvent.click(
+      screen.getByRole("menuitemradio", { name: "Automation name" }),
+    );
+    expect(rowTitles()).toEqual([
       "Alpha active",
       "Zulu active",
       "Aardvark pending",
@@ -383,26 +427,30 @@ describe("AutomationOverviewView", () => {
     );
 
     const sortTrigger = screen.getByRole("button", {
-      name: "Sort: Automation name, ascending",
+      name: "Sort: Next run, ascending",
     });
     expect(sortTrigger.querySelector('[data-icon="ArrowUpDown"]')).toBeTruthy();
     fireEvent.pointerDown(sortTrigger);
     const projectOption = screen.getByRole("menuitemradio", {
       name: "Project",
     });
+    const nextOption = screen.getByRole("menuitemradio", {
+      name: "Next run",
+    });
     const nameOption = screen.getByRole("menuitemradio", {
       name: "Automation name",
     });
     expect(projectOption.getAttribute("aria-disabled")).toBe("true");
     expect(projectOption.getAttribute("aria-checked")).toBe("false");
-    expect(nameOption.getAttribute("aria-checked")).toBe("true");
+    expect(nameOption.getAttribute("aria-checked")).toBe("false");
+    expect(nextOption.getAttribute("aria-checked")).toBe("true");
     expect(iconNames(projectOption)).toEqual(["ArrowUp"]);
-    expect(iconNames(nameOption)).toEqual(["ArrowUp"]);
-    fireEvent.click(nameOption);
+    expect(iconNames(nextOption)).toEqual(["ArrowUp"]);
+    fireEvent.click(nextOption);
     expect(sortTrigger.querySelector('[data-icon="ArrowUpDown"]')).toBeTruthy();
-    expect(iconNames(nameOption)).toEqual(["ArrowDown"]);
+    expect(iconNames(nextOption)).toEqual(["ArrowDown"]);
     expect(sortTrigger.getAttribute("aria-label")).toBe(
-      "Sort: Automation name, descending",
+      "Sort: Next run, descending",
     );
   });
 
@@ -423,7 +471,7 @@ describe("AutomationOverviewView", () => {
     );
 
     const sortTrigger = screen.getByRole("button", {
-      name: "Sort: Automation name, ascending",
+      name: "Sort: Next run, ascending",
     });
     fireEvent.click(sortTrigger);
 
@@ -436,7 +484,9 @@ describe("AutomationOverviewView", () => {
     expect(projectOption.getAttribute("aria-checked")).toBe("false");
     expect(projectOption.getAttribute("aria-disabled")).toBe("true");
     expect((projectOption as HTMLButtonElement).disabled).toBe(true);
-    expect(nameOption.getAttribute("aria-checked")).toBe("true");
+    expect(
+      screen.getByRole("menuitemradio", { name: "Next run" }).ariaChecked,
+    ).toBe("true");
     expect(
       screen
         .getAllByRole("menuitemradio")
@@ -445,11 +495,11 @@ describe("AutomationOverviewView", () => {
 
     fireEvent.click(projectOption);
     expect(sortTrigger.getAttribute("aria-label")).toBe(
-      "Sort: Automation name, ascending",
+      "Sort: Next run, ascending",
     );
     fireEvent.click(nameOption);
     expect(sortTrigger.getAttribute("aria-label")).toBe(
-      "Sort: Automation name, descending",
+      "Sort: Automation name, ascending",
     );
     expect(nameOption.getAttribute("aria-checked")).toBe("true");
   });
@@ -490,10 +540,40 @@ describe("AutomationOverviewView", () => {
     expect(onCreateViaChat).toHaveBeenCalledOnce();
   });
 
-  it("keeps labelled metadata tooltip triggers outside the row button", async () => {
+  it("shows each automation's agents, schedule, and next run", () => {
+    const base = INSTALLED_AUTOMATIONS[0]!;
+    if ("problem" in base.automation) throw new Error("Expected a fixture");
+    const script = {
+      ...base.automation,
+      id: "auto_sweep",
+      name: "Security sweep",
+      execution: { mode: "script" as const, script: "echo", timeoutMs: 1000 },
+    };
     render(
       <AutomationOverviewView
-        entries={INSTALLED_AUTOMATIONS}
+        entries={[
+          base,
+          {
+            ...base,
+            automation: script,
+            scriptAgents: [
+              {
+                providerId: "codex",
+                model: "gpt-6.1-sol",
+                reasoningLevel: "max",
+              },
+              {
+                providerId: "claude",
+                model: "claude-opus-5-5[1m]",
+                reasoningLevel: "max",
+              },
+            ],
+          },
+          {
+            ...base,
+            automation: { ...script, id: "auto_plain", name: "Plain script" },
+          },
+        ]}
         error={null}
         onRetry={() => {}}
         onOpenDetail={() => {}}
@@ -504,26 +584,19 @@ describe("AutomationOverviewView", () => {
       />,
     );
 
-    const projectIcon = screen.getByRole("img", { name: "Project" });
-    const scheduleIcon = screen.getByRole("img", { name: "Schedule" });
-    const nextRunIcon = screen.getByRole("img", { name: "Next run" });
-
-    expect(projectIcon.tabIndex).toBe(0);
-    expect(scheduleIcon.tabIndex).toBe(0);
-    expect(nextRunIcon.tabIndex).toBe(0);
-    expect(projectIcon.closest("button")).toBeNull();
-    expect(scheduleIcon.closest("button")).toBeNull();
-    expect(nextRunIcon.closest("button")).toBeNull();
-    expect(projectIcon.querySelector('[data-icon="Folder"]')).toBeTruthy();
-    expect(scheduleIcon.querySelector('[data-icon="DateTime"]')).toBeTruthy();
-    expect(
-      nextRunIcon.querySelector('[data-icon="CalendarCheckOut02"]'),
-    ).toBeTruthy();
-    expect(nextRunIcon).toBeTruthy();
-    expect(screen.queryByText("Next")).toBeNull();
-
-    focusWithKeyboard(nextRunIcon);
-    expect((await screen.findByRole("tooltip")).textContent).toBe("Next run");
+    const row = (name: string) =>
+      screen.getByText(name).closest<HTMLElement>("[data-resource-row]")!;
+    const digest = row("Nightly digest");
+    expect(digest.textContent).toContain("Claude Code·Opus 5·Medium");
+    expect(digest.textContent).toContain("9AM");
+    expect(digest.textContent).toMatch(/in \d+d/);
+    expect(digest.querySelector('[aria-label="Not run yet"]')).toBeTruthy();
+    expect(row("Security sweep").textContent).toContain(
+      "Codex ⇄ Claude Code·GPT-6.1 Sol ⇄ Opus 5.5 (1M)·Max",
+    );
+    expect(row("Plain script").textContent).toContain("Script");
+    expect(screen.queryByText("bb")).toBeNull();
+    expect(screen.getByText("Active · 3")).toBeTruthy();
   });
 
   it("shows Personal as project membership and keeps it searchable", async () => {
@@ -533,6 +606,14 @@ describe("AutomationOverviewView", () => {
           {
             ...INSTALLED_AUTOMATIONS[0]!,
             project: { id: "proj_personal", name: "Personal" },
+          },
+          {
+            ...INSTALLED_AUTOMATIONS[0]!,
+            automation: {
+              ...INSTALLED_AUTOMATIONS[0]!.automation,
+              id: "auto_other",
+              name: "Other digest",
+            },
           },
         ]}
         error={null}
@@ -546,12 +627,12 @@ describe("AutomationOverviewView", () => {
     );
     const icon = screen.getByRole("img", { name: "Project: Personal" });
     expect(icon.querySelector('[data-icon="Folder"]')).not.toBeNull();
-    expect(screen.queryByText("Local")).toBeNull();
-    expect(screen.getByText("Personal")).toBeTruthy();
+    expect(icon.parentElement?.textContent).toBe("Personal");
     fireEvent.change(screen.getByPlaceholderText("Search automations"), {
       target: { value: "Personal" },
     });
     expect(screen.getByText("Nightly digest")).toBeTruthy();
+    expect(screen.queryByText("Other digest")).toBeNull();
     focusWithKeyboard(icon);
     expect((await screen.findByRole("tooltip")).textContent).toBe(
       "Project: Personal",
@@ -565,7 +646,16 @@ describe("AutomationOverviewView", () => {
     };
     const { container } = render(
       <AutomationOverviewView
-        entries={[namedLocalEntry]}
+        entries={[
+          namedLocalEntry,
+          {
+            ...INSTALLED_AUTOMATIONS[0]!,
+            automation: {
+              ...INSTALLED_AUTOMATIONS[0]!.automation,
+              id: "auto_other",
+            },
+          },
+        ]}
         error={null}
         onRetry={() => {}}
         onOpenDetail={() => {}}

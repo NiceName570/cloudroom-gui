@@ -35,7 +35,9 @@ import { isDeepStrictEqual } from "node:util";
 import {
   forkSession,
   type CanUseTool,
+  type ElicitationRequest,
   type HookCallback,
+  type OnElicitation,
   type PermissionResult,
   type SDKMessage,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -1995,6 +1997,61 @@ function createCanUseTool(threadIdRef: ThreadIdRef): CanUseTool {
   };
 }
 
+function buildElicitationFormContent(
+  request: ElicitationRequest,
+): Record<string, boolean> | null {
+  const properties = request.requestedSchema?.properties ?? {};
+  if (typeof properties !== "object" || properties === null) {
+    return null;
+  }
+  const fields = Object.entries(properties);
+  if (
+    !fields.every(
+      ([, field]) => (field as { type?: unknown } | null)?.type === "boolean",
+    )
+  ) {
+    return null;
+  }
+  return Object.fromEntries(fields.map(([name]) => [name, true]));
+}
+
+function createOnElicitation(threadIdRef: ThreadIdRef): OnElicitation {
+  const forwardInteractiveRequest =
+    createForwardInteractiveRequest(threadIdRef);
+
+  return async (request, options) => {
+    const threadSession = threadAttachments.get(
+      threadIdRef.current,
+    )?.residentSession;
+    const content =
+      request.mode === "url" ? undefined : buildElicitationFormContent(request);
+    if (!threadSession || content === null) {
+      return { action: "cancel" };
+    }
+
+    const result = await forwardInteractiveRequest({
+      threadId: threadIdRef.current,
+      providerThreadId:
+        threadSession.attachment.providerThreadId ?? threadIdRef.current,
+      toolName: request.displayName ?? request.serverName,
+      toolUseId: `elicitation-${options.requestId}`,
+      input: {},
+      decisionReason: [request.message, request.url].filter(Boolean).join(" "),
+      promptText: undefined,
+      blockedPath: undefined,
+      suggestions: undefined,
+      signal: options.signal,
+    });
+    if (options.signal.aborted) {
+      return { action: "cancel" };
+    }
+    if (result.behavior !== "allow") {
+      return { action: "decline" };
+    }
+    return content ? { action: "accept", content } : { action: "accept" };
+  };
+}
+
 async function handleRequest(request: ClaudeCodeJsonRpcRequest): Promise<void> {
   switch (request.method) {
     case "initialize":
@@ -2097,6 +2154,7 @@ function attachThreadSession(
     sessionOptions.sessionId = providerThreadId;
   }
   sessionOptions.canUseTool = createCanUseTool(threadIdRef);
+  sessionOptions.onElicitation = createOnElicitation(threadIdRef);
   if (params.dynamicTools && params.dynamicTools.length > 0) {
     const mcpServer = buildBridgeMcpServer(
       params.dynamicTools,

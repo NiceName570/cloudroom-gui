@@ -9,7 +9,7 @@ import {
   type ReactNode,
   useRef,
 } from "react";
-import { useSetAtom } from "jotai";
+import { useAtomValue, useSetAtom } from "jotai";
 import type { ThreadListEntry } from "@cloudroom/domain";
 import type { PluginComposerThreadRowStatus } from "@get-bb/plugin-sdk";
 import { getThreadConversationCollapsedAtom } from "@/components/secondary-panel/threadSecondaryPanelAtoms";
@@ -92,6 +92,10 @@ import {
 } from "@/components/thread/ThreadTitleMentions";
 import { pluginIconName } from "@/components/plugin/PluginIcon";
 import { usePluginThreadRowStatus } from "@/lib/plugin-thread-row-status";
+import { harnessIconModeAtom } from "@/components/settings/HarnessIconsSetting";
+import { ProviderIconMark } from "@/components/settings/ProviderIconMark";
+import { useSystemProviders } from "@/hooks/queries/system-queries";
+import { getProviderIconInfo } from "@/lib/provider-icon";
 
 const SIDEBAR_TITLE_DOUBLE_CLICK_MS = 400;
 
@@ -253,6 +257,29 @@ function PluginThreadRowStatusIndicator({
       )}
       aria-label={status.label}
     />
+  );
+}
+
+function ThreadHarnessIcon({ providerId }: { providerId: string }) {
+  const provider =
+    useSystemProviders().data?.find((entry) => entry.id === providerId) ?? null;
+  const { icon: Mark, ariaLabel } = getProviderIconInfo(
+    "agent",
+    providerId,
+    provider,
+  );
+  return (
+    <span
+      role="img"
+      aria-label={ariaLabel}
+      className="pointer-events-none flex shrink-0 text-muted-foreground"
+    >
+      {provider === null ? (
+        <Mark className="size-3.5" />
+      ) : (
+        <ProviderIconMark provider={provider} icon={Mark} className="size-3.5" />
+      )}
+    </span>
   );
 }
 
@@ -515,6 +542,7 @@ function ThreadRowComponent({
   );
   const shortcut = useSidebarThreadShortcut(thread.id);
   const pluginThreadRowStatus = usePluginThreadRowStatus(thread.id);
+  const harnessIconMode = useAtomValue(harnessIconModeAtom);
   const showActive = isActive;
   const hasPendingInteraction = thread.hasPendingInteraction;
   const threadRuntimeBusy = isRuntimeBusyThread(thread);
@@ -657,6 +685,52 @@ function ThreadRowComponent({
   const rowLinkRef = useRef<HTMLAnchorElement>(null);
   const showCloudIcon = thread.executionTarget === "cloud" && (!thread.teleport || ["complete", "cancelled"].includes(thread.teleport.phase));
   const teleportDirection = useTeleportDirection(thread);
+  const locationIcon = teleportDirection ? (
+    <span
+      role="img"
+      aria-label={teleportDirection === "cloud" ? "Teleporting to Cloud" : "Teleporting to Local"}
+      className="pointer-events-none size-3.5 shrink-0 overflow-hidden"
+    >
+      <Icon
+        name={teleportDirection === "cloud" ? "ArrowUp" : "ArrowDown"}
+        aria-hidden
+        className={cn(
+          "size-3.5 text-primary [&_path]:stroke-[1.9]",
+          teleportDirection === "cloud" ? "bb-teleport-up" : "bb-teleport-down",
+        )}
+      />
+    </span>
+  ) : (
+    <Icon
+      name={showCloudIcon ? "Cloud" : "Laptop"}
+      aria-label={thread.executionTarget === "cloud" ? "Cloud thread" : "Local thread"}
+      className={cn(
+        "pointer-events-none size-3.5 shrink-0",
+        showCloudIcon ? "text-primary [&_path]:stroke-[1.9]" : "text-muted-foreground opacity-50",
+      )}
+    />
+  );
+  const harnessIcon = <ThreadHarnessIcon providerId={thread.providerId} />;
+  const leadingIcon =
+    teleportDirection || harnessIconMode === "off" ? (
+      locationIcon
+    ) : harnessIconMode === "beside" ? (
+      <>
+        {locationIcon}
+        {harnessIcon}
+      </>
+    ) : harnessIconMode === "instead" ? (
+      harnessIcon
+    ) : (
+      <span className="relative flex shrink-0">
+        <span className="flex transition-opacity group-hover/thread-row:opacity-0">
+          {locationIcon}
+        </span>
+        <span className="absolute inset-0 flex opacity-0 transition-opacity group-hover/thread-row:opacity-100">
+          {harnessIcon}
+        </span>
+      </span>
+    );
   const rowContent = (
     <>
       <NavLink
@@ -697,31 +771,7 @@ function ThreadRowComponent({
           !shortcut && SIDEBAR_HOVER_ACTIONS_INSET_CLASS,
         )}
       >
-        {teleportDirection ? (
-          <span
-            role="img"
-            aria-label={teleportDirection === "cloud" ? "Teleporting to Cloud" : "Teleporting to Local"}
-            className="pointer-events-none size-3.5 shrink-0 overflow-hidden"
-          >
-            <Icon
-              name={teleportDirection === "cloud" ? "ArrowUp" : "ArrowDown"}
-              aria-hidden
-              className={cn(
-                "size-3.5 text-primary [&_path]:stroke-[1.9]",
-                teleportDirection === "cloud" ? "bb-teleport-up" : "bb-teleport-down",
-              )}
-            />
-          </span>
-        ) : (
-          <Icon
-            name={showCloudIcon ? "Cloud" : "Laptop"}
-            aria-label={thread.executionTarget === "cloud" ? "Cloud thread" : "Local thread"}
-            className={cn(
-              "pointer-events-none size-3.5 shrink-0",
-              showCloudIcon ? "text-primary [&_path]:stroke-[1.9]" : "text-muted-foreground opacity-50",
-            )}
-          />
-        )}
+        {leadingIcon}
         {isEditing ? (
           <span className="relative z-10 min-w-0 flex-1 overflow-visible">
             {editor}

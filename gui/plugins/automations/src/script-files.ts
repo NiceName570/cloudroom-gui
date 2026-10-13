@@ -9,7 +9,10 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { basename, extname, join, resolve, relative } from "node:path";
-import type { AutomationScriptInterpreter } from "./rpc-types.js";
+import type {
+  AutomationAgentSummary,
+  AutomationScriptInterpreter,
+} from "./rpc-types.js";
 
 const SCRIPT_DIR_NAME = "scripts";
 const DEFAULT_SCRIPT_FILE_NAME = "script.sh";
@@ -146,6 +149,30 @@ export async function readAutomationScript(args: {
   scriptFile: string;
 }): Promise<string> {
   return readFile(await resolveAutomationScriptPath(args), "utf8");
+}
+
+const THREAD_SPAWN = /\b(?:room-cli|cloudroom) thread spawn\b/u;
+const AGENT_FLAG =
+  /--(provider|model|reasoning-level)[= ]+['"]?([\w.:[\]-]+)/gu;
+
+export function scriptAgents(source: string): AutomationAgentSummary[] {
+  if (!THREAD_SPAWN.test(source)) return [];
+  const agents: { providerId: string | null; model: string | null }[] = [];
+  let reasoningLevel: string | null = null;
+  for (const [, flag, value = ""] of source.matchAll(AGENT_FLAG)) {
+    const last = agents.at(-1);
+    if (flag === "reasoning-level") reasoningLevel ??= value;
+    else if (flag === "provider")
+      agents.push({ providerId: value, model: null });
+    else if (last !== undefined && last.model === null) last.model = value;
+    else agents.push({ providerId: null, model: value });
+  }
+  const unique = new Map(
+    (agents.length > 0 ? agents : [{ providerId: null, model: null }]).map(
+      (agent) => [`${agent.providerId} ${agent.model}`, agent],
+    ),
+  );
+  return [...unique.values()].map((agent) => ({ ...agent, reasoningLevel }));
 }
 
 export async function deleteAutomationScriptDir(args: {

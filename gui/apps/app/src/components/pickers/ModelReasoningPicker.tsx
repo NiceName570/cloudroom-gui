@@ -56,6 +56,7 @@ import {
 } from "@/hooks/queries/system-queries";
 import { resolveModelCatalogSelection } from "@/hooks/thread-creation-options/model-catalog-selection";
 import { useIsCompactViewport } from "@cloudroom/shared-ui/hooks/use-compact-viewport";
+import { FLOATING_DRAWER_CLASS_NAME } from "@cloudroom/shared-ui/responsive-overlay";
 import {
   OPTION_BASE_CLASS_NAME,
   OPTION_INTERACTIVE_CLASS_NAME,
@@ -131,6 +132,11 @@ const REASONING_CYCLE_COMMANDS = [
 
 const MODEL_SEARCH_MIN_OPTIONS = 5;
 const MODEL_PICKER_MENU_WIDTH_CLASS_NAME = "w-max min-w-64 max-w-80";
+
+const COMPACT_SHEET_PADDING_CLASS_NAME =
+  "px-3.5 pt-0 pb-[max(1.5rem,env(safe-area-inset-bottom))]";
+const COMPACT_ROW_CLASS_NAME = "min-h-[42px] rounded-[15px] px-3.5";
+const COMPACT_SELECTED_ROW_CLASS_NAME = "bg-composer font-medium shadow-message";
 
 function splitModelLabelTag(label: string): ModelLabelParts {
   const match = label.match(/^(.*\S)\s*\(([^()]+)\)$/u);
@@ -984,21 +990,29 @@ export function ModelReasoningPicker({
       <PopoverContent
         align={align}
         mobileTitle="Model"
+        mobileClassName={FLOATING_DRAWER_CLASS_NAME}
         onKeyDown={handleReasoningArrowKeyDown}
         onMobileContentAnimationEnd={handleMobileContentAnimationEnd}
         autoFocusRef={showSearchInput ? searchInputRef : undefined}
         className={cn(
-          "group/model-picker flex min-h-0 w-72 flex-col p-0",
+          "group/model-picker flex min-h-0 w-72 flex-col",
           isCompactViewport
-            ? "overflow-y-hidden"
-            : "max-h-[min(var(--radix-popover-content-available-height),calc(100dvh-0.5rem))] max-w-[calc(100vw-1rem)] overflow-hidden",
+            ? cn("overflow-y-hidden", COMPACT_SHEET_PADDING_CLASS_NAME)
+            : "max-h-[min(var(--radix-popover-content-available-height),calc(100dvh-0.5rem))] max-w-[calc(100vw-1rem)] overflow-hidden p-0",
           !isCompactViewport && !lockModelSelection && "data-[side=top]:h-80",
         )}
       >
         <ResetBrowseStateOnContentUnmount onReset={resetBrowseState} />
         <div className="flex min-h-0 flex-1 flex-col">
           {showProviderTabs ? (
-            <div className="flex shrink-0 items-center gap-0.5 border-b border-border bg-background px-1.5">
+            <div
+              className={cn(
+                "flex shrink-0 items-center",
+                isCompactViewport
+                  ? "gap-1 rounded-full bg-surface-recessed p-1"
+                  : "gap-0.5 border-b border-border bg-background px-1.5",
+              )}
+            >
               {providerOptions.map((provider) => {
                 const TabIcon = provider.icon;
                 const isActive = provider.value === activeProviderId;
@@ -1015,10 +1029,15 @@ export function ModelReasoningPicker({
                       handleProviderSelect(provider.value);
                     }}
                     className={cn(
-                      "relative flex h-8 w-7 items-center justify-center focus-visible:outline-none max-md:pointer-coarse:h-10 max-md:pointer-coarse:w-9",
+                      "relative flex items-center justify-center focus-visible:outline-none",
                       LIST_HOVER_TRANSITION,
+                      isCompactViewport
+                        ? "aspect-square min-w-0 max-w-10 flex-1 rounded-full"
+                        : "h-8 w-7 max-md:pointer-coarse:h-10 max-md:pointer-coarse:w-9",
                       isActive
-                        ? "text-foreground after:absolute after:inset-x-1 after:-bottom-px after:h-0.5 after:rounded-full after:bg-foreground"
+                        ? isCompactViewport
+                          ? "bg-composer text-foreground shadow-message"
+                          : "text-foreground after:absolute after:inset-x-1 after:-bottom-px after:h-0.5 after:rounded-full after:bg-foreground"
                         : "text-subtle-foreground hover:text-foreground",
                     )}
                   >
@@ -1088,8 +1107,9 @@ export function ModelReasoningPicker({
                     className={cn(
                       "flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain p-1",
                       showSearchInput && "pt-0.5",
-                      !isCompactViewport &&
-                        "max-h-64 group-data-[side=top]/model-picker:max-h-none",
+                      isCompactViewport
+                        ? "fade-clip-bottom -mx-3.5 max-h-[15.25rem] px-3.5 pb-8 pt-1.5"
+                        : "max-h-64 group-data-[side=top]/model-picker:max-h-none",
                     )}
                   >
                     {activeModelIsLoading ? (
@@ -1241,7 +1261,7 @@ function MoreModelsToggleRow({
         LIST_HOVER_TRANSITION,
         MENU_ITEM_LAST_HOVERED_CLASS,
         isActive && "bg-state-active",
-        isCompactViewport ? "py-2" : "py-[0.3125rem]",
+        isCompactViewport ? COMPACT_ROW_CLASS_NAME : "py-[0.3125rem]",
       )}
       {...hoverProps}
     >
@@ -1410,7 +1430,8 @@ function MenuRowButton({
         MENU_ITEM_LAST_HOVERED_CLASS,
         isActive && "bg-state-active",
         disabled && "cursor-not-allowed opacity-60",
-        isCompactViewport ? "py-2" : "py-1",
+        isCompactViewport ? COMPACT_ROW_CLASS_NAME : "py-1",
+        isCompactViewport && selected && COMPACT_SELECTED_ROW_CLASS_NAME,
       )}
       {...hoverProps}
     >
@@ -1459,13 +1480,18 @@ function ReasoningEffortMenu({
   onSelect: (value: ReasoningLevel) => void;
   children: ReactNode;
 }) {
+  const isCompactViewport = useIsCompactViewport();
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={modal}>
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
       <DropdownMenuContent
         align={align}
         mobileTitle="Effort"
-        className="min-w-36"
+        mobileClassName={FLOATING_DRAWER_CLASS_NAME}
+        className={cn(
+          "min-w-36",
+          isCompactViewport && COMPACT_SHEET_PADDING_CLASS_NAME,
+        )}
       >
         <DropdownMenuLabel className="font-normal text-subtle-foreground">
           Effort
@@ -1479,8 +1505,13 @@ function ReasoningEffortMenu({
               aria-checked={selected}
               onSelect={() => onSelect(option.value)}
               className={cn(
-                selected &&
-                  "bg-background text-foreground shadow-message dark:bg-surface-recessed",
+                isCompactViewport
+                  ? cn(
+                      COMPACT_ROW_CLASS_NAME,
+                      selected && COMPACT_SELECTED_ROW_CLASS_NAME,
+                    )
+                  : selected &&
+                      "bg-background text-foreground shadow-message dark:bg-surface-recessed",
               )}
             >
               {option.label}
@@ -1518,12 +1549,21 @@ function ModelSearchInput({
   listboxId,
   activeOptionId,
 }: ModelSearchInputProps) {
+  const isCompactViewport = useIsCompactViewport();
   return (
-    <div className="shrink-0 px-1.5 pb-1 pt-1.5">
+    <div
+      className={cn(
+        "shrink-0",
+        isCompactViewport ? "pt-2.5" : "px-1.5 pb-1 pt-1.5",
+      )}
+    >
       <div className="relative">
         <Icon
           name="Search"
-          className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+          className={cn(
+            "pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground",
+            isCompactViewport ? "left-4 size-4" : "left-2 size-3.5",
+          )}
         />
         <Input
           ref={inputRef}
@@ -1537,7 +1577,11 @@ function ModelSearchInput({
           aria-controls={listboxId}
           aria-autocomplete="list"
           aria-activedescendant={activeOptionId}
-          className="h-7 rounded-md border border-border bg-foreground/5 pl-7 pr-2 text-xs text-foreground placeholder:text-subtle-foreground shadow-none focus-visible:border-primary/50 focus-visible:ring-0"
+          className={cn(
+            "h-7 rounded-md border border-border bg-foreground/5 pl-7 pr-2 text-xs text-foreground placeholder:text-subtle-foreground shadow-none focus-visible:border-primary/50 focus-visible:ring-0",
+            isCompactViewport &&
+              "h-10 rounded-full border-transparent bg-surface-recessed pl-10 pr-4",
+          )}
         />
       </div>
     </div>

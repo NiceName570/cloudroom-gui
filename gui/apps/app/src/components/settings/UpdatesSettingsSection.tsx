@@ -235,7 +235,7 @@ function UpdatesRow({
   );
 }
 
-function RowVersions({
+export function RowVersions({
   current,
   latest,
 }: {
@@ -303,7 +303,7 @@ function RowStateCaption({
   );
 }
 
-function RowStateControl({
+export function RowStateControl({
   state,
   actionIcon,
   actionLabel,
@@ -1228,6 +1228,34 @@ export function MachineUpdatesRows({
   return <>{rows}</>;
 }
 
+function AgentCliLinkRow({ onOpen }: { onOpen: () => void }) {
+  return (
+    <ResourceRow
+      className={ROW_SPACING}
+      actionsVisibility="always"
+      openLabel="Open agent updates in Providers"
+      onOpen={onOpen}
+      leading={
+        <Icon aria-hidden name="Bot" className="size-3.5 text-muted-foreground" />
+      }
+      title="Agent CLIs"
+      state={
+        <span className="text-xs text-muted-foreground">
+          Versions, updates, and auto-update are in Agents → Providers
+        </span>
+      }
+      trailingMeta={null}
+      actions={
+        <Icon
+          aria-hidden
+          name="ChevronRight"
+          className="size-4 text-muted-foreground"
+        />
+      }
+    />
+  );
+}
+
 export function MachineUpdatesSection({
   machine,
   isThisMachine,
@@ -1312,15 +1340,21 @@ export function UpdatesSettingsSection({
   const { failuresByJobKey, queuedJobKeys, runningJobKey, startInstall } =
     useProviderCliInstallRunner();
 
+  const agentsHostId =
+    localDaemonHostId ??
+    inventory.machines.find((machine) => machine.isPrimary)?.host.id ??
+    null;
   const visibleProviderIssues: {
     hostId: string;
     issue: ProviderCliIssue;
-  }[] = inventory.machines.flatMap((machine) =>
-    visibleProviderUpdateIssues(machine).map((issue) => ({
-      hostId: machine.host.id,
-      issue,
-    })),
-  );
+  }[] = inventory.machines
+    .filter((machine) => machine.host.id !== agentsHostId)
+    .flatMap((machine) =>
+      visibleProviderUpdateIssues(machine).map((issue) => ({
+        hostId: machine.host.id,
+        issue,
+      })),
+    );
   const actionableIssues = visibleProviderIssues
     .filter(
       (
@@ -1530,7 +1564,12 @@ export function UpdatesSettingsSection({
                     }
                   />
                 ) : null}
-                {machine.statusError ? (
+                {machine.host.id === agentsHostId ? (
+                  <AgentCliLinkRow
+                    onOpen={() => navigate(getSettingsRoutePath("providers"))}
+                  />
+                ) : null}
+                {machine.statusError && machine.host.id !== agentsHostId ? (
                   <ProviderCliCheckRow
                     machine={machine}
                     onRecheckClis={(hostId) => {
@@ -1544,18 +1583,20 @@ export function UpdatesSettingsSection({
                     }
                   />
                 ) : null}
-                <MachineUpdatesRows
-                  machine={machine}
-                  runningJobKey={runningJobKey}
-                  queuedJobKeys={queuedJobKeys}
-                  failuresByJobKey={failuresByJobKey}
-                  onStartInstall={(hostId, issue) =>
-                    startInstall({ hostId, issue })
-                  }
-                  onOpenProvider={() =>
-                    navigate(getSettingsRoutePath("providers"))
-                  }
-                />
+                {machine.host.id === agentsHostId ? null : (
+                  <MachineUpdatesRows
+                    machine={machine}
+                    runningJobKey={runningJobKey}
+                    queuedJobKeys={queuedJobKeys}
+                    failuresByJobKey={failuresByJobKey}
+                    onStartInstall={(hostId, issue) =>
+                      startInstall({ hostId, issue })
+                    }
+                    onOpenProvider={() =>
+                      navigate(getSettingsRoutePath("providers"))
+                    }
+                  />
+                )}
               </MachineUpdatesSection>
             );
           })

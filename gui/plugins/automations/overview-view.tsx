@@ -1,38 +1,35 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
+import {
+  experimental_ProviderIcon as ProviderIcon,
+  experimental_useProviders as useProviders,
+  type PluginProvidersState,
+} from "@get-bb/plugin-sdk/app";
 import type {
+  AutomationAgentSummary,
   AutomationReadProblem,
   AutomationResponse,
   AutomationsOverviewResponse,
 } from "./src/rpc-types.js";
-import {
-  AutomationLifecycleControl,
-  automationIconName,
-} from "./detail-view.js";
+import { AutomationLifecycleControl } from "./detail-view.js";
 import { Icon } from "@cloudroom/shared-ui/icon";
 import { DelayedLoading } from "@cloudroom/shared-ui/delayed-loading";
-import {
-  ResourcePagination,
-  useResourcePagination,
-  useResourceViewportPageSize,
-} from "@cloudroom/shared-ui/resource-pagination";
 import { COARSE_POINTER_ICON_SIZE_SHRINK_CLASS } from "@cloudroom/shared-ui/coarse-pointer-sizing";
 import {
   ResourceBrowseGrid,
   ResourceCollectionPage,
   ResourceCollectionViewport,
   ResourceCreateButton,
-  ResourceListPanel,
   ResourceListState,
   ResourceFilterMenu,
   ResourceMeta,
   ResourceRow,
-  ResourceRowDetailChevron,
   ResourceSortMenu,
   ResourceTemplateBrowseCard,
   ResourceToolbar,
@@ -43,14 +40,16 @@ import {
   type AutomationStatusFilter,
   formatAutomationTrigger,
   formatOverviewScheduleMetadata,
+  formatScheduleRunTime,
   formatScheduleStatusLabel,
+  formatTimeUntil,
   getOneShotLifecycle,
   matchesAutomationStatusFilters,
   oneShotLifecycleAllowsToggle,
   PERSONAL_PROJECT_ID,
 } from "./lib/format-schedule.js";
 import { AutomationMetadataItem } from "./metadata.js";
-import { CloudAutomationsList } from "./cloud-view.js";
+import type { CloudAutomation, CloudAutomationActions } from "./cloud-view.js";
 
 const AUTOMATION_STATUS_FILTER_OPTIONS = [
   { id: "active", label: "Active" },
@@ -91,9 +90,10 @@ export const AUTOMATION_CREATE_TEMPLATES = [
 
 type OverviewEntry = AutomationsOverviewResponse["automations"][number];
 type AutomationProjectFilter = `project:${string}`;
-type AutomationSortMode = "project" | "alpha";
+type AutomationSortMode = "next" | "project" | "alpha";
+type ProviderList = PluginProvidersState["providers"];
 type AutomationSortDirection = "asc" | "desc";
-export type AutomationCollectionMode = "installed" | "cloud" | "browse";
+export type AutomationCollectionMode = "installed" | "browse";
 type ReadableOverviewAutomation =
   | AutomationResponse
   | Extract<AutomationReadProblem, { problem: "missing-agent-prompt" }>;
@@ -113,45 +113,176 @@ function routeOf(
   return { projectId: automation.projectId, automationId: automation.id };
 }
 
-function AutomationRowLeading({
-  automation,
+const LAST_RUN_DOT = {
+  succeeded: { label: "Last run succeeded", className: "bg-success" },
+  skipped: { label: "Last run skipped", className: "bg-muted-foreground/50" },
+  failed: { label: "Last run failed", className: "bg-destructive" },
+  running: { label: "Running", className: "animate-pulse bg-primary" },
+} as const;
+
+function AutomationStatusDot({
+  status,
 }: {
-  automation: AutomationResponse;
+  status: AutomationResponse["lastRunStatus"];
 }) {
-  if (automation.lastRunStatus === "failed") {
-    return (
-      <Icon
-        name="CircleX"
-        className={cn(
-          "text-destructive",
-          COARSE_POINTER_ICON_SIZE_SHRINK_CLASS,
-        )}
-        aria-label="Failed"
-      />
-    );
-  }
-  if (automation.lastRunStatus === "running") {
-    return (
-      <Icon
-        name="Loading"
-        className={cn(
-          "animate-spin text-muted-foreground/50",
-          COARSE_POINTER_ICON_SIZE_SHRINK_CLASS,
-        )}
-        aria-label="Running"
-      />
-    );
-  }
   return (
-    <Icon
-      name={automationIconName(automation)}
+    <span
+      role="img"
+      aria-label={status === null ? "Not run yet" : LAST_RUN_DOT[status].label}
       className={cn(
-        "text-muted-foreground",
-        COARSE_POINTER_ICON_SIZE_SHRINK_CLASS,
+        "size-[7px] shrink-0 rounded-full",
+        status === null
+          ? "ring-1 ring-inset ring-muted-foreground/50"
+          : LAST_RUN_DOT[status].className,
       )}
-      aria-hidden
     />
   );
+}
+
+function formatModelName(model: string): string {
+  const [, base = model, context] = /^(.+?)(?:\[(\w+)\])?$/u.exec(model) ?? [];
+  const name = (base.split("/").at(-1) ?? base)
+    .replace(/^claude-/u, "")
+    .split("-")
+    .map((part) =>
+      part === "gpt" ? "GPT" : part.charAt(0).toUpperCase() + part.slice(1),
+    )
+    .join(" ")
+    .replace(/(\d) (?=\d)/gu, "$1.")
+    .replace(/^GPT /u, "GPT-");
+  return context === undefined ? name : `${name} (${context.toUpperCase()})`;
+}
+
+function automationAgents(
+  automation: AutomationResponse,
+  scriptAgents: readonly AutomationAgentSummary[] | undefined,
+): readonly AutomationAgentSummary[] {
+  const { execution } = automation;
+  if (execution.mode === "script") return scriptAgents ?? [];
+  return [
+    {
+      providerId: execution.providerId,
+      model: execution.model,
+      reasoningLevel: execution.reasoningLevel,
+    },
+  ];
+}
+
+function AutomationAgentLine({
+  agents,
+  providers,
+}: {
+  agents: readonly AutomationAgentSummary[];
+  providers: ProviderList;
+}) {
+  if (agents.length === 0) {
+    return (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <Icon
+          name="ComputerTerminal01"
+          className="size-3.5 shrink-0"
+          aria-hidden
+        />
+        Script
+      </span>
+    );
+  }
+  const providerIds = [...new Set(agents.map((agent) => agent.providerId))];
+  const models = [
+    ...new Set(
+      agents.flatMap((agent) =>
+        agent.model === null || agent.model === "default"
+          ? []
+          : [formatModelName(agent.model)],
+      ),
+    ),
+  ];
+  const levels = [
+    ...new Set(
+      agents.flatMap((agent) =>
+        agent.reasoningLevel === null ? [] : [agent.reasoningLevel],
+      ),
+    ),
+  ];
+  const providerOf = (id: string) => providers.find((info) => info.id === id);
+  const levelLabel = (level: string) =>
+    providers
+      .flatMap((info) => info.reasoningLevels ?? [])
+      .find((option) => option.id === level)?.label ?? level;
+  const parts = [
+    providerIds
+      .map((id) =>
+        id === null ? "Agent" : (providerOf(id)?.displayName ?? id),
+      )
+      .join(" ⇄ "),
+    models.join(" ⇄ "),
+    levels.map(levelLabel).join(" ⇄ "),
+  ].filter((part) => part !== "");
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="flex shrink-0 items-center">
+        {providerIds.map((id, index) =>
+          id === null ? (
+            <Icon key="default" name="Bot" className="size-3.5" aria-hidden />
+          ) : (
+            <ProviderIcon
+              key={id}
+              providerKind="agent"
+              provider={providerOf(id) ?? { id }}
+              fallback="Bot"
+              className={cn("size-3.5", index > 0 && "-ml-1")}
+              aria-hidden
+            />
+          ),
+        )}
+      </span>
+      {parts.map((part, index) => (
+        <Fragment key={index}>
+          {index > 0 ? (
+            <span aria-hidden className="text-muted-foreground/40">
+              ·
+            </span>
+          ) : null}
+          <span
+            className={cn(
+              "min-w-0 truncate",
+              part === levelLabel("max") && "text-primary",
+            )}
+          >
+            {part}
+          </span>
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+function automationNextRunText(
+  automation: AutomationResponse,
+  now: number,
+): string {
+  if (automation.lastRunStatus === "running") return "Running";
+  const metadata = formatOverviewScheduleMetadata({
+    enabled: automation.enabled,
+    nextRunAt: automation.nextRunAt,
+    trigger: automation.trigger,
+    runCount: automation.runCount,
+    lastRunStatus: automation.lastRunStatus,
+    now,
+  });
+  if (metadata?.isNextRun && automation.nextRunAt !== null) {
+    return formatTimeUntil(automation.nextRunAt, now);
+  }
+  return formatScheduleStatusLabel({ ...automation, now }).split(" — ")[0]!;
+}
+
+function useMinuteClock(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
 }
 
 export function automationProjectLabel(
@@ -247,14 +378,121 @@ function AutomationRowMetadata({
   );
 }
 
+function AutomationListRow({
+  status,
+  name,
+  agentLine,
+  cloud,
+  schedule,
+  nextRun,
+  nextRunAt,
+  enabled,
+  muted,
+  toggle,
+  actions,
+  openLabel,
+  onOpen,
+}: {
+  status: AutomationResponse["lastRunStatus"];
+  name: string;
+  agentLine: ReactNode;
+  cloud: boolean;
+  schedule: string;
+  nextRun: string;
+  nextRunAt: number | null;
+  enabled: boolean;
+  muted: boolean;
+  toggle: ReactNode;
+  actions?: ReactNode;
+  openLabel?: string;
+  onOpen: () => void;
+}) {
+  return (
+    <ResourceRow
+      leading={<AutomationStatusDot status={status} />}
+      title={name}
+      description={
+        <span className="mt-1.5 flex min-w-0 items-center gap-1.5">
+          {agentLine}
+        </span>
+      }
+      className="py-3.5"
+      trailingMeta={
+        <span className="flex items-center gap-4 pr-3 text-xs">
+          <span
+            className={cn(
+              "hidden w-20 items-center gap-1.5 md:flex",
+              cloud ? "text-primary" : "text-muted-foreground",
+            )}
+          >
+            <Icon
+              name={cloud ? "Cloud" : "Laptop"}
+              className="size-3.5 shrink-0"
+              aria-hidden
+            />
+            {cloud ? "Cloud" : "Local"}
+          </span>
+          <span
+            className={cn(
+              "flex items-center gap-4",
+              actions && "group-focus-within:hidden group-hover:hidden",
+            )}
+          >
+            <span
+              className="hidden w-52 truncate text-muted-foreground md:block"
+              title={schedule}
+            >
+              {schedule}
+            </span>
+            <span
+              className={cn(
+                "w-24 text-right tabular-nums",
+                nextRun === "Running"
+                  ? "font-medium text-primary"
+                  : enabled && nextRun.startsWith("in ")
+                    ? "font-mono text-foreground"
+                    : "text-muted-foreground",
+              )}
+              title={
+                nextRunAt === null
+                  ? undefined
+                  : formatScheduleRunTime(nextRunAt)
+              }
+            >
+              {nextRun}
+            </span>
+          </span>
+          {actions ? (
+            <span className="hidden w-80 items-center justify-end gap-1 group-focus-within:flex group-hover:flex">
+              {actions}
+            </span>
+          ) : null}
+        </span>
+      }
+      muted={muted}
+      openLabel={openLabel}
+      onOpen={onOpen}
+      persistentActions={toggle}
+    />
+  );
+}
+
 export function OverviewRow({
   automation,
   project,
+  scriptAgents,
+  providers,
+  showProject,
+  now,
   onNavigate,
   onEnabledChange,
 }: {
   automation: AutomationResponse;
   project: OverviewEntry["project"];
+  scriptAgents: readonly AutomationAgentSummary[] | undefined;
+  providers: ProviderList;
+  showProject: boolean;
+  now: number;
   onNavigate: (route: AutomationDetailRoute) => void;
   onEnabledChange: (
     enabled: boolean,
@@ -270,17 +508,46 @@ export function OverviewRow({
     lastRunStatus: automation.lastRunStatus,
   });
   const lifecycleLocked = !oneShotLifecycleAllowsToggle(oneShotLifecycle);
+  const projectLabel = automationProjectLabel(project);
 
   return (
-    <ResourceRow
-      leading={<AutomationRowLeading automation={automation} />}
-      title={automation.name}
-      description={
-        <AutomationRowMetadata automation={automation} project={project} />
+    <AutomationListRow
+      status={automation.lastRunStatus}
+      name={automation.name}
+      agentLine={
+        <>
+          <AutomationAgentLine
+            agents={automationAgents(automation, scriptAgents)}
+            providers={providers}
+          />
+          {showProject ? (
+            <>
+              <span aria-hidden className="text-muted-foreground/40">
+                ·
+              </span>
+              <AutomationMetadataItem
+                icon="Folder"
+                iconLabel={
+                  project.id === PERSONAL_PROJECT_ID
+                    ? `Project: ${projectLabel}`
+                    : "Project"
+                }
+                title={projectLabel}
+              >
+                {projectLabel}
+              </AutomationMetadataItem>
+            </>
+          ) : null}
+        </>
       }
+      cloud={false}
+      schedule={formatAutomationTrigger(automation.trigger)}
+      nextRun={automationNextRunText(automation, now)}
+      nextRunAt={automation.nextRunAt}
+      enabled={automation.enabled}
       muted={lifecycleLocked}
       onOpen={() => onNavigate(route)}
-      persistentActions={
+      toggle={
         <AutomationLifecycleControl
           checked={automation.enabled && !lifecycleLocked}
           disabled={lifecycleLocked || togglePending}
@@ -300,7 +567,94 @@ export function OverviewRow({
           }}
         />
       }
-      trailingVisual={<ResourceRowDetailChevron />}
+    />
+  );
+}
+
+export function CloudAutomationRow({
+  automation,
+  providers,
+  now,
+  actions,
+}: {
+  automation: CloudAutomation;
+  providers: ProviderList;
+  now: number;
+  actions: CloudAutomationActions;
+}) {
+  const nextRunAt =
+    automation.next_run_at === null ? null : Date.parse(automation.next_run_at);
+  return (
+    <AutomationListRow
+      status={
+        automation.last_error !== null
+          ? "failed"
+          : automation.last_run_at !== null
+            ? "succeeded"
+            : null
+      }
+      name={automation.name}
+      agentLine={
+        <AutomationAgentLine
+          agents={[
+            automation.agent ?? {
+              providerId: null,
+              model: null,
+              reasoningLevel: null,
+            },
+          ]}
+          providers={providers}
+        />
+      }
+      cloud
+      schedule={
+        automation.cron === null
+          ? "One time"
+          : formatAutomationTrigger({
+              triggerType: "schedule",
+              cron: automation.cron,
+              timezone: automation.timezone,
+            })
+      }
+      nextRun={
+        !automation.enabled
+          ? "Paused"
+          : nextRunAt === null
+            ? "Starts soon"
+            : formatTimeUntil(nextRunAt, now)
+      }
+      nextRunAt={nextRunAt}
+      enabled={automation.enabled}
+      muted={!automation.enabled}
+      openLabel="Open Cloud thread"
+      onOpen={() => actions.onOpen(automation)}
+      actions={
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => actions.onRun(automation)}
+          >
+            Run now
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => actions.onDelete(automation)}
+          >
+            Delete
+          </Button>
+        </>
+      }
+      toggle={
+        <AutomationLifecycleControl
+          checked={automation.enabled}
+          label={`${automation.enabled ? "Pause" : "Resume"} ${automation.name}`}
+          onCheckedChange={(enabled) =>
+            actions.onEnabledChange(automation, enabled)
+          }
+        />
+      }
     />
   );
 }
@@ -407,6 +761,72 @@ function automationSearchValues(
   return values;
 }
 
+function isActiveEntry({ automation }: OverviewEntry): boolean {
+  return (
+    "problem" in automation ||
+    matchesAutomationStatusFilters(automation, ["active"])
+  );
+}
+
+type ListItem = { name: string; nextRunAt: number | null; node: ReactNode };
+
+function sortByNextRun(
+  items: readonly ListItem[],
+  direction: AutomationSortDirection,
+): ListItem[] {
+  return [...items].sort((left, right) =>
+    applyAutomationSortDirection(
+      (left.nextRunAt ?? Number.MAX_SAFE_INTEGER) -
+        (right.nextRunAt ?? Number.MAX_SAFE_INTEGER) ||
+        left.name.localeCompare(right.name),
+      direction,
+    ),
+  );
+}
+
+function cloudNextRunAt(automation: CloudAutomation): number | null {
+  return automation.next_run_at === null
+    ? null
+    : Date.parse(automation.next_run_at);
+}
+
+function AutomationSummary({
+  entries,
+  cloud,
+  now,
+}: {
+  entries: readonly OverviewEntry[];
+  cloud: readonly CloudAutomation[];
+  now: number;
+}) {
+  const active = entries.filter(isActiveEntry);
+  const activeCloud = cloud.filter((automation) => automation.enabled);
+  const nextRunAt = Math.min(
+    ...active.flatMap(({ automation }) =>
+      "problem" in automation || automation.nextRunAt === null
+        ? []
+        : [automation.nextRunAt],
+    ),
+    ...activeCloud.flatMap((automation) => cloudNextRunAt(automation) ?? []),
+  );
+  return (
+    <>
+      <span className="text-foreground">
+        {active.length + activeCloud.length}
+      </span>{" "}
+      active
+      {Number.isFinite(nextRunAt) ? (
+        <>
+          {" · next run "}
+          <span className="text-foreground">
+            {formatTimeUntil(nextRunAt, now)}
+          </span>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 export function AutomationOverviewView({
   entries,
   error,
@@ -416,6 +836,7 @@ export function AutomationOverviewView({
   onCreateViaChat,
   activeMode,
   onModeChange,
+  cloud,
 }: {
   entries: OverviewEntry[] | null;
   error: string | null;
@@ -431,6 +852,10 @@ export function AutomationOverviewView({
   onCreateViaChat: (prompt?: string) => void;
   activeMode: AutomationCollectionMode;
   onModeChange: (mode: AutomationCollectionMode) => void;
+  cloud?: {
+    rows: readonly CloudAutomation[];
+    actions: CloudAutomationActions;
+  };
 }) {
   const [query, setQuery] = useState("");
   const [projectFilters, setProjectFilters] = useState<
@@ -439,9 +864,12 @@ export function AutomationOverviewView({
   const [statusFilters, setStatusFilters] = useState<AutomationStatusFilter[]>(
     [],
   );
-  const [sortMode, setSortMode] = useState<AutomationSortMode>("alpha");
+  const [sortMode, setSortMode] = useState<AutomationSortMode>("next");
   const [sortDirection, setSortDirection] =
     useState<AutomationSortDirection>("asc");
+  const [showInactive, setShowInactive] = useState(false);
+  const { providers } = useProviders();
+  const now = useMinuteClock();
 
   const normalizedQuery = query.trim().toLowerCase();
   const projectCounts = useMemo(() => {
@@ -470,7 +898,7 @@ export function AutomationOverviewView({
   }, [projectCounts]);
   useEffect(() => {
     if (sortMode === "project" && projectBucketCount <= 1) {
-      setSortMode("alpha");
+      setSortMode("next");
       setSortDirection("asc");
     }
   }, [projectBucketCount, sortMode]);
@@ -505,39 +933,53 @@ export function AutomationOverviewView({
       }
       if ("problem" in left.automation) return -1;
       if ("problem" in right.automation) return 1;
+      const bothEnabled = left.automation.enabled && right.automation.enabled;
       const lifecycleOrder =
         automationLifecycleSortRank(left.automation) -
         automationLifecycleSortRank(right.automation);
-      if (lifecycleOrder !== 0) return lifecycleOrder;
+      if (lifecycleOrder !== 0 && !(sortMode === "next" && bothEnabled)) {
+        return lifecycleOrder;
+      }
+      const byName = left.automation.name.localeCompare(right.automation.name);
       const base =
         sortMode === "project"
           ? automationProjectLabel(left.project).localeCompare(
               automationProjectLabel(right.project),
-            ) || left.automation.name.localeCompare(right.automation.name)
-          : left.automation.name.localeCompare(right.automation.name);
+            ) || byName
+          : sortMode === "next"
+            ? (left.automation.nextRunAt ?? Number.MAX_SAFE_INTEGER) -
+                (right.automation.nextRunAt ?? Number.MAX_SAFE_INTEGER) ||
+              byName
+            : byName;
       return applyAutomationSortDirection(base, sortDirection);
     });
   }, [filteredEntries, sortDirection, sortMode]);
-  const [installedViewport, setInstalledViewport] =
-    useState<HTMLDivElement | null>(null);
-  const installedPageSize = useResourceViewportPageSize(installedViewport);
-  const installedPagination = useResourcePagination(visibleEntries, {
-    pageSize: installedPageSize,
-    resetKey: [
-      normalizedQuery,
-      projectFilters.join(","),
-      statusFilters.join(","),
-      sortMode,
-      sortDirection,
-    ].join("\u0000"),
-  });
-  const hasInstalledPagination =
-    error === null &&
-    entries !== null &&
-    installedPagination.total > installedPagination.pageSize;
+  const activeEntries = visibleEntries.filter(isActiveEntry);
+  const inactiveEntries = visibleEntries.filter(
+    (entry) => !isActiveEntry(entry),
+  );
+  const cloudRows = cloud?.rows ?? [];
+  const visibleCloud = cloudRows.filter(
+    (automation) =>
+      projectFilters.length === 0 &&
+      (statusFilters.length === 0 ||
+        statusFilters.includes(automation.enabled ? "active" : "paused")) &&
+      (normalizedQuery === "" ||
+        [automation.name, "Cloud"].some((value) =>
+          value.toLowerCase().includes(normalizedQuery),
+        )),
+  );
+  const inactiveOpen =
+    showInactive || normalizedQuery !== "" || statusFilters.length > 0;
   const handleSortChange = useCallback(
     (nextSort: string) => {
-      if (nextSort !== "project" && nextSort !== "alpha") return;
+      if (
+        nextSort !== "project" &&
+        nextSort !== "alpha" &&
+        nextSort !== "next"
+      ) {
+        return;
+      }
       if (nextSort === "project" && projectBucketCount <= 1) return;
       if (nextSort === sortMode) {
         setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
@@ -564,11 +1006,11 @@ export function AutomationOverviewView({
         <ResourceListState state="loading" message="Loading automations" />
       </DelayedLoading>
     );
-  } else if (entries.length === 0) {
+  } else if (entries.length === 0 && cloudRows.length === 0) {
     body = (
       <ResourceListState state="empty" message="No automations installed." />
     );
-  } else if (visibleEntries.length === 0) {
+  } else if (visibleEntries.length === 0 && visibleCloud.length === 0) {
     body = (
       <ResourceListState
         state="empty"
@@ -582,42 +1024,129 @@ export function AutomationOverviewView({
       />
     );
   } else {
+    const renderEntry = ({
+      automation,
+      project,
+      scriptAgents,
+    }: OverviewEntry) =>
+      "problem" in automation ? (
+        <AutomationProblemRow
+          key={automation.id}
+          automation={automation}
+          project={project}
+          onNavigate={onOpenDetail}
+        />
+      ) : (
+        <OverviewRow
+          key={automation.id}
+          automation={automation}
+          project={project}
+          scriptAgents={scriptAgents}
+          providers={providers}
+          showProject={projectBucketCount > 1}
+          now={now}
+          onNavigate={onOpenDetail}
+          onEnabledChange={onEnabledChange}
+        />
+      );
+    const localItem = (entry: OverviewEntry): ListItem => ({
+      name: entry.automation.name,
+      nextRunAt:
+        "problem" in entry.automation ? null : entry.automation.nextRunAt,
+      node: renderEntry(entry),
+    });
+    const cloudItem = (automation: CloudAutomation): ListItem => ({
+      name: automation.name,
+      nextRunAt: cloudNextRunAt(automation),
+      node: cloud ? (
+        <CloudAutomationRow
+          key={automation.id}
+          automation={automation}
+          providers={providers}
+          now={now}
+          actions={cloud.actions}
+        />
+      ) : null,
+    });
+    const problems = activeEntries.filter(
+      (entry) => "problem" in entry.automation,
+    );
+    const activeRest = [
+      ...activeEntries
+        .filter((entry) => !("problem" in entry.automation))
+        .map(localItem),
+      ...visibleCloud.filter((automation) => automation.enabled).map(cloudItem),
+    ];
+    const activeItems = [
+      ...problems.map(localItem),
+      ...(sortMode === "next"
+        ? sortByNextRun(activeRest, sortDirection)
+        : activeRest),
+    ];
+    const inactiveItems = [
+      ...inactiveEntries.map(localItem),
+      ...visibleCloud
+        .filter((automation) => !automation.enabled)
+        .map(cloudItem),
+    ];
     body = (
-      <ResourceListPanel>
-        {installedPagination.items.map((entry) => {
-          const { automation, project } = entry;
-          return "problem" in automation ? (
-            <AutomationProblemRow
-              key={automation.id}
-              automation={automation}
-              project={project}
-              onNavigate={onOpenDetail}
-            />
-          ) : (
-            <OverviewRow
-              key={automation.id}
-              automation={automation}
-              project={project}
-              onNavigate={onOpenDetail}
-              onEnabledChange={onEnabledChange}
-            />
-          );
-        })}
-      </ResourceListPanel>
+      <div className="pb-4">
+        {activeItems.length > 0 ? (
+          <>
+            <div className="pb-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+              Active · {activeItems.length}
+            </div>
+            <div className="divide-y divide-foreground/10 border-b border-foreground/10">
+              {activeItems.map((item) => item.node)}
+            </div>
+          </>
+        ) : null}
+        {inactiveItems.length > 0 ? (
+          <>
+            <button
+              type="button"
+              aria-expanded={inactiveOpen}
+              onClick={() => setShowInactive(!inactiveOpen)}
+              className="mt-4 flex cursor-pointer items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Icon
+                name={inactiveOpen ? "ChevronDown" : "ChevronRight"}
+                className="size-3.5"
+                aria-hidden
+              />
+              Paused &amp; finished
+              <span className="text-muted-foreground/60">
+                {inactiveItems.length}
+              </span>
+            </button>
+            {inactiveOpen ? (
+              <div className="mt-2 divide-y divide-foreground/10 border-y border-foreground/10">
+                {inactiveItems.map((item) => item.node)}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </div>
     );
   }
 
   return (
     <ResourceCollectionPage
       id="automations-collection"
-      description="Manage scheduled Cloudroom work across projects and folders. Automations run recurring or one-time tasks without manual prompting."
+      description={
+        entries !== null && entries.length + cloudRows.length > 0 ? (
+          <AutomationSummary entries={entries} cloud={cloudRows} now={now} />
+        ) : (
+          "Manage scheduled Cloudroom work across projects and folders. Automations run recurring or one-time tasks without manual prompting."
+        )
+      }
       modes={[
         {
           id: "installed",
           label: "Installed",
-          count: entries?.length ?? undefined,
+          count:
+            entries === null ? undefined : entries.length + cloudRows.length,
         },
-        { id: "cloud", label: "Cloud" },
         { id: "browse", label: "Browse" },
       ]}
       activeMode={activeMode}
@@ -630,11 +1159,7 @@ export function AutomationOverviewView({
         />
       }
     >
-      {activeMode === "cloud" ? (
-        <ResourceCollectionViewport contentClassName="space-y-3">
-          <CloudAutomationsList />
-        </ResourceCollectionViewport>
-      ) : activeMode === "browse" ? (
+      {activeMode === "browse" ? (
         <ResourceCollectionViewport contentClassName="space-y-3">
           <ResourceBrowseGrid>
             {AUTOMATION_CREATE_TEMPLATES.map((template) => (
@@ -650,7 +1175,6 @@ export function AutomationOverviewView({
       ) : (
         <ResourceCollectionViewport
           scrollId="automations-installed-results"
-          viewportRef={setInstalledViewport}
           toolbar={
             <ResourceToolbar
               searchValue={query}
@@ -688,6 +1212,7 @@ export function AutomationOverviewView({
                     direction={sortDirection}
                     compact
                     options={[
+                      { id: "next", label: "Next run" },
                       {
                         id: "project",
                         label: "Project",
@@ -700,18 +1225,6 @@ export function AutomationOverviewView({
                 </>
               }
             />
-          }
-          footer={
-            hasInstalledPagination ? (
-              <ResourcePagination
-                page={installedPagination.page}
-                pageSize={installedPagination.pageSize}
-                total={installedPagination.total}
-                visibleCount={installedPagination.visibleCount}
-                onPageChange={installedPagination.setPage}
-                scrollTargetId="automations-installed-results"
-              />
-            ) : undefined
           }
         >
           {body}

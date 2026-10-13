@@ -252,6 +252,16 @@ export function sessionByToken(
   });
 }
 
+export async function phoneUser(db: D1Database, token: string): Promise<string | null> {
+  const row = await db
+    .prepare(
+      "SELECT server.user_id FROM session JOIN server ON server.id = session.server_id WHERE session.token_hash = ? AND session.target IS NULL AND session.expires_at > ?",
+    )
+    .bind(await sha256Hex(token), Date.now())
+    .first<{ user_id: string }>();
+  return row?.user_id ?? null;
+}
+
 export async function revokeSessions(
   db: D1Database,
   serverId: string,

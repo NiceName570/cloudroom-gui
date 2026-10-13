@@ -1,11 +1,17 @@
-import { ClaudeConnectionButton } from "@/components/ClaudeConnection";
+import {
+  ClaudeConnectionButton,
+  useClaudeConnection,
+} from "@/components/ClaudeConnection";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { arrayMove } from "@dnd-kit/sortable";
+import { useQueryClient } from "@tanstack/react-query";
+import { invalidateHostProviderCliStatus } from "@/hooks/cache-owners/provider-cli-status-cache-owner";
 import type {
   AppSettings,
   CompletedTurnDisplay,
   ProviderInfo,
 } from "@cloudroom/domain";
+import type { ProviderCliStatus } from "@cloudroom/host-daemon-contract";
 import type { SystemProviderState } from "@cloudroom/server-contract";
 import { Button } from "@cloudroom/shared-ui/button";
 import { COARSE_POINTER_ICON_SIZE_CLASS } from "@cloudroom/shared-ui/coarse-pointer-sizing";
@@ -28,7 +34,17 @@ import {
   useProviderCliInstallRunner,
   type ProviderCliInstallTarget,
 } from "@/components/provider-cli/provider-cli-install";
-import { providerCliJobKey } from "@/components/provider-cli/provider-cli-install-store";
+import {
+  openProviderCliInstallLog,
+  providerCliJobKey,
+} from "@/components/provider-cli/provider-cli-install-store";
+import {
+  openCodexConnection,
+  openCursorConnection,
+  useCloudLogin,
+} from "@/components/CodexConnectionPanel";
+import { RowStateControl, RowVersions } from "./UpdatesSettingsSection";
+import { useCloudroomAccount } from "@/hooks/queries/cloudroom-queries";
 import {
   useHostProviderCliStatus,
   useInstallableProviders,
@@ -51,6 +67,20 @@ interface ProvidersSettingsSectionProps {
   generalSettings: AppSettings;
   onGeneralSettingsChange: (next: AppSettings) => Promise<unknown> | void;
 }
+
+const CELL = {
+  mac: "sm:w-20",
+  cloud: "sm:w-24",
+  auto: "sm:w-24",
+  status: "sm:w-20",
+} as const;
+
+const TABLE_BUTTON = "h-7 px-2.5 text-xs";
+
+const CLOUD_LOGINS: Record<string, "codex" | "cursor"> = {
+  codex: "codex",
+  "acp-cursor": "cursor",
+};
 
 function applyProviderOrder(
   providers: readonly ProviderInfo[],
@@ -111,7 +141,7 @@ function ProviderRowIcon({ provider }: { provider: ProviderInfo }) {
     provider,
   )?.icon;
   return (
-    <span className="flex size-5 items-center justify-center">
+    <span className="flex size-5 shrink-0 items-center justify-center">
       {ProviderIcon ? (
         <ProviderIconMark
           provider={provider}
@@ -125,50 +155,344 @@ function ProviderRowIcon({ provider }: { provider: ProviderInfo }) {
   );
 }
 
-interface SortableProviderRowProps {
+function Cell({
+  label,
+  className,
+  children,
+}: {
+  label?: string;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center gap-1.5 sm:justify-center",
+        className,
+      )}
+    >
+      {label === undefined ? null : (
+        <span className="text-xs text-muted-foreground sm:hidden">{label}</span>
+      )}
+      {children}
+    </span>
+  );
+}
+
+function Cells({
+  showCloud,
+  mac,
+  cloud,
+  auto,
+  status,
+}: {
+  showCloud: boolean;
+  mac: ReactNode;
+  cloud: ReactNode;
+  auto: ReactNode;
+  status: ReactNode;
+}) {
+  return (
+    <span className="flex w-full flex-wrap items-center gap-x-3 gap-y-2 pl-8 sm:contents">
+      <Cell label="Mac" className={CELL.mac}>
+        {mac}
+      </Cell>
+      {showCloud ? (
+        <Cell label="Cloud" className={CELL.cloud}>
+          {cloud}
+        </Cell>
+      ) : null}
+      <Cell label="Auto-update" className={CELL.auto}>
+        {auto}
+      </Cell>
+      <Cell className={cn("max-sm:ml-auto", CELL.status)}>{status}</Cell>
+    </span>
+  );
+}
+
+const DASH = <span className="text-muted-foreground/50">–</span>;
+
+function Check({ label }: { label: string }) {
+  return (
+    <span className="flex items-center text-primary">
+      <Icon name="Check" aria-hidden className="size-4" />
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+function TableButton({
+  children,
+  label,
+  primary = false,
+  onClick,
+}: {
+  children: ReactNode;
+  label: string;
+  primary?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      type="button"
+      variant={primary ? "default" : "outline"}
+      size="sm"
+      aria-label={label}
+      className={TABLE_BUTTON}
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function MacLogin({
+  hostId,
+  onChange,
+  provider,
+  state,
+}: {
+  hostId: string | null;
+  onChange: () => void;
+  provider: ProviderInfo;
+  state: SystemProviderState | undefined;
+}) {
+  if (state === undefined) return null;
+  if (state.status !== "unauthenticated" && state.status !== "expired") {
+    return state.status === "ready" ? (
+      <Check label={`Signed in to ${provider.displayName} on this Mac`} />
+    ) : (
+      DASH
+    );
+  }
+  if (hostId === null) return DASH;
+  if (provider.id === "claude-code")
+    return (
+      <ClaudeConnectionButton
+        target="local"
+        hostId={hostId}
+        presentation="inline"
+        className={TABLE_BUTTON}
+        text="Log in"
+        onConnected={onChange}
+      />
+    );
+  return state.loginCommand ? (
+    <ProviderLoginButton
+      className={TABLE_BUTTON}
+      command={state.loginCommand}
+      displayName={provider.displayName}
+      hostId={hostId}
+      onDone={onChange}
+    />
+  ) : (
+    DASH
+  );
+}
+
+function ClaudeCloudLogin() {
+  const auth = useClaudeConnection({ target: "cloud" });
+  if (auth.data?.state === "connected")
+    return <Check label="Claude Code is connected in the Cloud" />;
+  return (
+    <ClaudeConnectionButton
+      target="cloud"
+      presentation="inline"
+      className={TABLE_BUTTON}
+      text="Connect"
+    />
+  );
+}
+
+function CodexCloudLogin({ kind }: { kind: "codex" | "cursor" }) {
+  const auth = useCloudLogin(kind);
+  const name = kind === "cursor" ? "Cursor" : "Codex";
+  const open = () =>
+    kind === "cursor" ? openCursorConnection() : openCodexConnection();
+  if (auth.isPending) return null;
+  if (auth.data?.state === "connected")
+    return (
+      <button
+        type="button"
+        aria-label={`Manage ${name} Cloud login`}
+        className="flex items-center rounded-sm text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        onClick={open}
+      >
+        <Icon name="Check" aria-hidden className="size-4" />
+      </button>
+    );
+  return (
+    <TableButton label={`Connect ${name} in the Cloud`} onClick={open}>
+      Connect
+    </TableButton>
+  );
+}
+
+function CloudLogin({ provider }: { provider: ProviderInfo }) {
+  if (provider.id === "claude-code") return <ClaudeCloudLogin />;
+  const kind = CLOUD_LOGINS[provider.id];
+  return kind === undefined ? DASH : <CodexCloudLogin kind={kind} />;
+}
+
+function AutoUpdateSwitch({
+  disabled,
+  generalSettings,
+  onGeneralSettingsChange,
+  provider,
+  status,
+}: {
   disabled: boolean;
   generalSettings: AppSettings;
-  isDefault: boolean;
   onGeneralSettingsChange: ProvidersSettingsSectionProps["onGeneralSettingsChange"];
   provider: ProviderInfo;
-  setupAction: ReactNode;
+  status: ProviderCliStatus | undefined;
+}) {
+  if (status?.npmPackageName == null) return DASH;
+  const autoUpdate = generalSettings.providerAutoUpdate ?? [];
+  return (
+    <Switch
+      checked={autoUpdate.includes(provider.id)}
+      disabled={disabled}
+      aria-label={`Auto-update ${provider.displayName}`}
+      onCheckedChange={(checked) =>
+        onGeneralSettingsChange({
+          ...generalSettings,
+          providerAutoUpdate: checked
+            ? [...autoUpdate, provider.id]
+            : autoUpdate.filter((id) => id !== provider.id),
+        })
+      }
+    />
+  );
+}
+
+function useCliJob(hostId: string | null, providerId: string) {
+  const { failuresByJobKey, queuedJobKeys, runningJobKey, startInstall } =
+    useProviderCliInstallRunner();
+  const jobKey = hostId === null ? null : providerCliJobKey(hostId, providerId);
+  return {
+    busy:
+      jobKey !== null &&
+      (runningJobKey === jobKey || queuedJobKeys.has(jobKey)),
+    failure: jobKey === null ? null : (failuresByJobKey.get(jobKey) ?? null),
+    startInstall,
+  };
+}
+
+function UpdateStatus({
+  hostId,
+  provider,
+  status,
+}: {
+  hostId: string | null;
+  provider: ProviderInfo;
+  status: ProviderCliStatus | undefined;
+}) {
+  const { busy, failure, startInstall } = useCliJob(hostId, provider.id);
+  if (status === undefined) return null;
+  const issue = buildProviderCliIssue({ provider: provider.id, status });
+  if (busy) return <RowStateControl live state="in-progress" />;
+  if (issue === null) return <RowStateControl state="up-to-date" />;
+  if (hostId === null || !hasProviderCliAction(issue))
+    return <RowStateControl state="update-manually" />;
+  const failed = failure?.issueFingerprint === issue.fingerprint;
+  return (
+    <TableButton
+      label={`${failed ? "Retry" : "Update"} ${provider.displayName}`}
+      primary={status.versionUnsupported && !failed}
+      onClick={() => startInstall({ hostId, issue })}
+    >
+      {failed ? "Retry" : "Update"}
+    </TableButton>
+  );
+}
+
+function FailedNote({
+  hostId,
+  provider,
+  status,
+}: {
+  hostId: string | null;
+  provider: ProviderInfo;
+  status: ProviderCliStatus | undefined;
+}) {
+  const { busy, failure } = useCliJob(hostId, provider.id);
+  const issue =
+    status === undefined
+      ? null
+      : buildProviderCliIssue({ provider: provider.id, status });
+  if (busy || failure === null || failure.issueFingerprint !== issue?.fingerprint)
+    return null;
+  return (
+    <button
+      type="button"
+      aria-label={`View ${provider.displayName} update log`}
+      className="shrink-0 text-xs font-semibold text-destructive hover:underline"
+      onClick={() => openProviderCliInstallLog(failure.logDialogState)}
+    >
+      Failed
+    </button>
+  );
+}
+
+interface ProviderRowProps {
+  disabled: boolean;
+  generalSettings: AppSettings;
+  hostId: string | null;
+  isDefault: boolean;
+  onGeneralSettingsChange: ProvidersSettingsSectionProps["onGeneralSettingsChange"];
+  onLoginChange: () => void;
+  provider: ProviderInfo;
+  showCloud: boolean;
+  state: SystemProviderState | undefined;
+  status: ProviderCliStatus | undefined;
 }
 
 function SortableProviderRow({
   disabled,
   generalSettings,
+  hostId,
   isDefault,
   onGeneralSettingsChange,
+  onLoginChange,
   provider,
-  setupAction,
-}: SortableProviderRowProps) {
+  showCloud,
+  state,
+  status,
+}: ProviderRowProps) {
   const { setNodeRef, style, isDragging, handle } = useSortableSettingsRow({
     id: provider.id,
     disabled,
     label: provider.displayName,
   });
+  const notInstalled = state?.status === "not_installed";
 
   return (
     <SettingsRow
       ref={setNodeRef}
       style={style}
       className={cn(
-        "group/provider-row",
+        "group/provider-row flex-wrap sm:flex-nowrap",
         isDragging && "relative z-10 rounded-md bg-card opacity-90 shadow-lift",
       )}
     >
       {handle}
       <ProviderRowIcon provider={provider} />
-      <span className="min-w-0 flex-1 truncate font-medium">
-        {provider.displayName}
-      </span>
-      {!provider.available ? <SettingsBadge>Unavailable</SettingsBadge> : null}
-      {isDefault ? <SettingsBadge>Default</SettingsBadge> : null}
-      {setupAction ??
-        (isDefault ? null : (
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="truncate font-medium">{provider.displayName}</span>
+        <RowVersions
+          current={status?.currentVersion ?? null}
+          latest={status?.latestVersion ?? null}
+        />
+        <FailedNote hostId={hostId} provider={provider} status={status} />
+        {!provider.available ? <SettingsBadge>Unavailable</SettingsBadge> : null}
+        {isDefault ? (
+          <SettingsBadge>Default</SettingsBadge>
+        ) : (
           <Button
             variant="ghost"
             size="sm"
+            className="h-6 px-2 text-xs text-muted-foreground opacity-0 group-hover/provider-row:opacity-100 focus-visible:opacity-100 max-sm:opacity-100"
             disabled={disabled || !provider.available}
             onClick={() =>
               onGeneralSettingsChange({
@@ -179,62 +503,72 @@ function SortableProviderRow({
           >
             Make default
           </Button>
-        ))}
+        )}
+      </span>
+      <Cells
+        showCloud={showCloud}
+        mac={
+          notInstalled ? (
+            DASH
+          ) : (
+            <MacLogin
+              hostId={hostId}
+              onChange={onLoginChange}
+              provider={provider}
+              state={state}
+            />
+          )
+        }
+        cloud={<CloudLogin provider={provider} />}
+        auto={
+          <AutoUpdateSwitch
+            disabled={disabled}
+            generalSettings={generalSettings}
+            onGeneralSettingsChange={onGeneralSettingsChange}
+            provider={provider}
+            status={status}
+          />
+        }
+        status={
+          notInstalled && state !== undefined && hostId !== null ? (
+            <ProviderSetupButton
+              hostId={hostId}
+              provider={provider}
+              state={state}
+            />
+          ) : (
+            <UpdateStatus hostId={hostId} provider={provider} status={status} />
+          )
+        }
+      />
     </SettingsRow>
   );
 }
 
 function ProviderSetupButton({
   hostId,
-  onChange,
   provider,
   state,
 }: {
   hostId: string;
-  onChange: () => void;
   provider: ProviderInfo;
   state: SystemProviderState;
 }) {
-  const { queuedJobKeys, runningJobKey, startInstall } =
-    useProviderCliInstallRunner();
-  if (state.status !== "not_installed") {
-    if (provider.id === "claude-code")
-      return (
-        <ClaudeConnectionButton
-          target="local"
-          hostId={hostId}
-          presentation="inline"
-          className="h-8 px-3"
-          text="Log in"
-          onConnected={onChange}
-        />
-      );
-    return state.loginCommand ? (
-      <ProviderLoginButton
-        command={state.loginCommand}
-        displayName={provider.displayName}
-        hostId={hostId}
-        onDone={onChange}
-      />
-    ) : null;
-  }
+  const { busy, startInstall } = useCliJob(hostId, provider.id);
   const installUrl = provider.strings?.installUrl;
   if (!state.canInstall && !installUrl) return null;
-  const jobKey = providerCliJobKey(hostId, provider.id);
-  const installing = runningJobKey === jobKey || queuedJobKeys.has(jobKey);
+  if (busy) return <RowStateControl live state="in-progress" />;
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      disabled={installing}
+    <TableButton
+      label={`Install ${provider.displayName}`}
       onClick={() => {
         if (state.canInstall)
           startInstall({ hostId, issue: hiddenProviderTarget(provider) });
         else if (installUrl) openUrlInExternalBrowser(installUrl);
       }}
     >
-      {installing ? "Installing…" : "Install"}
-    </Button>
+      Install
+    </TableButton>
   );
 }
 
@@ -258,58 +592,71 @@ function hiddenProviderTarget(
   };
 }
 
-function InstallableProvidersSection({
+function NotInstalledRow({
   hostId,
-  installable,
+  installable: { provider, target },
+  showCloud,
 }: {
-  hostId: string | null;
-  installable: readonly InstallableProvider[];
+  hostId: string;
+  installable: InstallableProvider;
+  showCloud: boolean;
 }) {
-  const { queuedJobKeys, runningJobKey, startInstall } =
-    useProviderCliInstallRunner();
-  if (hostId === null || installable.length === 0) return null;
-
+  const { busy, startInstall } = useCliJob(hostId, provider.id);
   return (
-    <SettingsSection
-      title="More agents"
-      description="Install another coding agent on this computer. Cloudroom runs its official installer, then adds it to the list above."
-    >
-      <SettingsRowList>
-        {installable.map(({ provider, target }) => {
-          const jobKey = providerCliJobKey(hostId, provider.id);
-          const installing =
-            runningJobKey === jobKey || queuedJobKeys.has(jobKey);
-          return (
-            <SettingsRow key={provider.id}>
-              <ProviderRowIcon provider={provider} />
-              <span className="min-w-0 flex-1 truncate font-medium">
-                {provider.displayName}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={installing}
-                aria-label={`Install ${provider.displayName}`}
-                onClick={() => startInstall({ hostId, issue: target })}
-              >
-                {installing ? "Installing…" : "Install"}
-              </Button>
-            </SettingsRow>
-          );
-        })}
-      </SettingsRowList>
-    </SettingsSection>
+    <SettingsRow className="flex-wrap sm:flex-nowrap">
+      <span className="-ml-2 w-7 shrink-0" />
+      <span className="opacity-50">
+        <ProviderRowIcon provider={provider} />
+      </span>
+      <span className="min-w-0 flex-1 truncate font-medium text-muted-foreground">
+        {provider.displayName}
+      </span>
+      <Cells
+        showCloud={showCloud}
+        mac={DASH}
+        cloud={<CloudLogin provider={provider} />}
+        auto={DASH}
+        status={
+          busy ? (
+            <RowStateControl live state="in-progress" />
+          ) : (
+            <TableButton
+              label={`Install ${provider.displayName}`}
+              onClick={() => startInstall({ hostId, issue: target })}
+            >
+              Install
+            </TableButton>
+          )
+        }
+      />
+    </SettingsRow>
+  );
+}
+
+function TableHeader({ showCloud }: { showCloud: boolean }) {
+  return (
+    <div className="mb-2.5 hidden items-center gap-3 border-b border-border pb-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground sm:flex">
+      <span className="flex-1 pl-16">Agent</span>
+      <span className={cn("text-center", CELL.mac)}>Mac</span>
+      {showCloud ? (
+        <span className={cn("text-center", CELL.cloud)}>Cloud</span>
+      ) : null}
+      <span className={cn("text-center", CELL.auto)}>Auto-update</span>
+      <span className={cn("text-center", CELL.status)}>Status</span>
+    </div>
   );
 }
 
 function useInstalledProviderCheck() {
   const { localDaemonHostId } = useHostDaemon();
-  const cliStatus = useHostProviderCliStatus({
-    hostId: localDaemonHostId,
-  }).data;
+  const primaryHostId = useSystemConfig().data?.primaryHostId ?? null;
+  const hostId = localDaemonHostId ?? primaryHostId;
+  const cliStatusQuery = useHostProviderCliStatus({ hostId });
+  const cliStatus = cliStatusQuery.data;
   return {
     cliStatus,
-    hostId: localDaemonHostId,
+    cliStatusQuery,
+    hostId,
     isInstalled: (provider: ProviderInfo) =>
       cliStatus?.[provider.id]?.installed !== false,
   };
@@ -361,8 +708,15 @@ export function ProvidersSettingsSection({
   onGeneralSettingsChange,
 }: ProvidersSettingsSectionProps) {
   const providersQuery = useSystemProviders();
-  const { cliStatus, hostId, isInstalled } = useInstalledProviderCheck();
+  const { cliStatus, cliStatusQuery, hostId, isInstalled } =
+    useInstalledProviderCheck();
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (hostId !== null)
+      void invalidateHostProviderCliStatus({ queryClient, hostId });
+  }, [hostId, queryClient]);
   const hiddenInstallable = useInstallableProviders({ hostId }).data ?? [];
+  const showCloud = useCloudroomAccount().data?.ready === true;
   const serverProviders: ProviderInfo[] = providersQuery.data ?? [];
   const [optimisticOrder, setOptimisticOrder] = useState<string[] | null>(null);
   const allProviders = applyProviderOrder(serverProviders, optimisticOrder);
@@ -371,24 +725,21 @@ export function ProvidersSettingsSection({
   const ids = providers.map((provider) => provider.id);
   const defaultProviderId =
     generalSettings.defaultProviderId ?? allProviders[0]?.id ?? null;
-  const primaryHostId = useSystemConfig().data?.primaryHostId ?? null;
-  const setupHostId = hostId ?? primaryHostId;
   const statesQuery = useSystemProviderStates({
-    hostId: setupHostId ?? undefined,
-    enabled: setupHostId !== null,
+    hostId: hostId ?? undefined,
+    enabled: hostId !== null,
     poll: false,
   });
   const { refetch: refetchStates } = statesQuery;
   const refreshStates = useCallback(() => void refetchStates(), [refetchStates]);
-  const setupStates = new Map(
-    (statesQuery.data?.providers ?? []).flatMap((state) =>
-      state.status === "unauthenticated" ||
-      state.status === "expired" ||
-      (state.status === "not_installed" &&
-        cliStatus?.[state.providerId]?.installed !== true)
-        ? [[state.providerId, state] as const]
-        : [],
-    ),
+  const states = new Map(
+    (statesQuery.data?.providers ?? []).map((state) => [
+      state.providerId,
+      state.status === "not_installed" &&
+      cliStatus?.[state.providerId]?.installed === true
+        ? undefined
+        : state,
+    ]),
   );
   const staleInstall = (statesQuery.data?.providers ?? []).some(
     (state) =>
@@ -437,54 +788,76 @@ export function ProvidersSettingsSection({
   };
 
   return (
-    <>
-      <SettingsSection
-        title="Providers"
-        description="Set the default agent and its order in provider pickers. Provider-specific settings are in the tabs above."
-      >
-        {providersQuery.isPending ? (
-          <p className="text-sm text-muted-foreground">Loading providers…</p>
-        ) : providers.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No agent is installed yet. Install one below.
-          </p>
-        ) : (
-          <SortableSettingsRowList
-            ids={ids}
-            disabled={disabled}
-            onReorder={handleReorder}
-          >
-            {providers.map((provider) => {
-              const setupState = setupStates.get(provider.id);
-              return (
+    <SettingsSection
+      title="Providers"
+      description="Your agents: logins, versions, updates, and the default. Provider-specific settings are in the tabs above."
+    >
+      {providersQuery.isPending ? (
+        <p className="text-sm text-muted-foreground">Loading providers…</p>
+      ) : (
+        <>
+          <TableHeader showCloud={showCloud} />
+          {cliStatusQuery.isError ? (
+            <p className="flex items-center gap-2 pb-2.5 text-xs text-destructive">
+              Couldn&apos;t check agent versions.
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                disabled={cliStatusQuery.isFetching}
+                onClick={() => void cliStatusQuery.refetch()}
+              >
+                Retry
+              </Button>
+            </p>
+          ) : null}
+          {providers.length === 0 ? (
+            <p className="py-2.5 text-sm text-muted-foreground">
+              No agent is installed yet. Install one below.
+            </p>
+          ) : (
+            <SortableSettingsRowList
+              ids={ids}
+              disabled={disabled}
+              onReorder={handleReorder}
+            >
+              {providers.map((provider) => (
                 <SortableProviderRow
                   key={provider.id}
                   disabled={disabled}
                   generalSettings={generalSettings}
+                  hostId={hostId}
                   isDefault={provider.id === defaultProviderId}
                   onGeneralSettingsChange={onGeneralSettingsChange}
+                  onLoginChange={refreshStates}
                   provider={provider}
-                  setupAction={
-                    setupHostId !== null && setupState !== undefined ? (
-                      <ProviderSetupButton
-                        hostId={setupHostId}
-                        onChange={refreshStates}
-                        provider={provider}
-                        state={setupState}
-                      />
-                    ) : null
-                  }
+                  showCloud={showCloud}
+                  state={states.get(provider.id)}
+                  status={cliStatus?.[provider.id]}
                 />
-              );
-            })}
-          </SortableSettingsRowList>
-        )}
-      </SettingsSection>
-      <InstallableProvidersSection hostId={hostId} installable={installable} />
-      {providers.some((provider) => provider.id === "claude-code") ? (
-        <ClaudeConnectionButton target="cloud" presentation="settings" />
-      ) : null}
-    </>
+              ))}
+            </SortableSettingsRowList>
+          )}
+          {hostId === null || installable.length === 0 ? null : (
+            <>
+              <div className="mt-2.5 border-t border-border pb-2.5 pt-3 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+                Not installed
+              </div>
+              <SettingsRowList>
+                {installable.map((entry) => (
+                  <NotInstalledRow
+                    key={entry.provider.id}
+                    hostId={hostId}
+                    installable={entry}
+                    showCloud={showCloud}
+                  />
+                ))}
+              </SettingsRowList>
+            </>
+          )}
+        </>
+      )}
+    </SettingsSection>
   );
 }
 

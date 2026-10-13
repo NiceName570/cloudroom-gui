@@ -3,6 +3,13 @@ import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
+import {
+  isPhoneRelay,
+  keepOfflineCopy,
+  macOffline,
+  reloadWhenMacGoesOffline,
+} from "./cloud/cloud-mode";
+import { installCloudServer } from "./cloud/cloud-server";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import { AppToaster } from "./components/AppToaster";
 import { registerProviderCliInstallQueryClient } from "./components/provider-cli/provider-cli-install-store";
@@ -43,7 +50,7 @@ initializeCorners();
 applyCachedAppThemeCss();
 initializeFavicon();
 
-createRoot(document.getElementById("root")!, {
+const root = createRoot(document.getElementById("root")!, {
   onUncaughtError: (error, errorInfo) => {
     console.error(
       "[Cloudroom] uncaught render error — the app root was torn down",
@@ -51,15 +58,30 @@ createRoot(document.getElementById("root")!, {
       errorInfo.componentStack,
     );
   },
-}).render(
-  <StrictMode>
-    <AppErrorBoundary>
-      <QueryClientProvider client={appQueryClient}>
-        <BrowserRouter>
-          <App />
-          <AppToaster />
-        </BrowserRouter>
-      </QueryClientProvider>
-    </AppErrorBoundary>
-  </StrictMode>,
-);
+});
+
+function render() {
+  root.render(
+    <StrictMode>
+      <AppErrorBoundary>
+        <QueryClientProvider client={appQueryClient}>
+          <BrowserRouter>
+            <App />
+            <AppToaster />
+          </BrowserRouter>
+        </QueryClientProvider>
+      </AppErrorBoundary>
+    </StrictMode>,
+  );
+}
+
+if (isPhoneRelay()) {
+  keepOfflineCopy();
+  void macOffline().then((offline) => {
+    if (offline) installCloudServer();
+    else reloadWhenMacGoesOffline();
+    render();
+  });
+} else {
+  render();
+}

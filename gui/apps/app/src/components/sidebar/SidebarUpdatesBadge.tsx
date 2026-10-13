@@ -140,7 +140,7 @@ export function SidebarUpdatesBadge({ onNavigate }: SidebarUpdatesBadgeProps) {
   function openSettings(): void {
     setOpen(false);
     onNavigate?.();
-    void navigate(updatesRoutePath);
+    void navigate(getSettingsRoutePath("providers"));
   }
 
   return (

@@ -1,8 +1,9 @@
-import type {
-  JsonObject,
-  JsonValue,
-  ThreadEvent,
-  ThreadTimelineModelFallback,
+import {
+  THREAD_HARNESS_SWITCH_OPERATION,
+  type JsonObject,
+  type JsonValue,
+  type ThreadEvent,
+  type ThreadTimelineModelFallback,
 } from "@cloudroom/domain";
 import type { ThreadEventWithMeta } from "./group-event-projection-turns.js";
 
@@ -76,7 +77,11 @@ export function extractThreadTimelineModelFallback(
     if (meta.seq < latestRelevantSeq) {
       continue;
     }
-    if (event.type === "client/turn/requested") {
+    if (
+      event.type === "client/turn/requested" ||
+      (event.type === "system/operation" &&
+        event.operation === THREAD_HARNESS_SWITCH_OPERATION)
+    ) {
       latestRelevantSeq = meta.seq;
       fallback = null;
       continue;

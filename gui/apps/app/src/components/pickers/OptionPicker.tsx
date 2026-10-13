@@ -109,10 +109,8 @@ export function OptionPicker<T extends string>({
       )}
     >
       <span className={OPTION_TRIGGER_CONTENT_CLASS_NAME} title={selectedTitle}>
-        {SelectedIcon ? (
-          <SelectedIcon
-            className={cn("size-3.5 shrink-0", tiles && "dark:text-primary")}
-          />
+        {SelectedIcon && !tiles ? (
+          <SelectedIcon className="size-3.5 shrink-0" />
         ) : null}
         {selectedCompactLabel ? (
           <>

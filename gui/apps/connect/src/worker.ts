@@ -4,6 +4,7 @@ import {
   GATE_AUTH_HEADER,
   GATE_MACHINE_ID_HEADER,
   MACHINE_CREDENTIAL_HEADER,
+  PHONE_SESSION_HEADER,
   SESSION_COOKIE,
   TUNNEL_TARGET_HEADER,
 } from "./protocol-headers.js";
@@ -17,6 +18,7 @@ import {
   createSession,
   formatCode,
   normalizeCode,
+  phoneUser,
   registerServer,
   revokeSessions,
   serverByCredential,
@@ -32,6 +34,8 @@ export { TunnelDO };
 
 const WRONG_CODE = "That code is wrong or expired. Get a new one in the Cloudroom desktop app.";
 const PORT = /^[1-9][0-9]{0,4}$/;
+const CLOUD_PATH = /^\/__cloud\/([a-z0-9_/-]{1,200})$/;
+const TOKEN = /^[a-f0-9]{64}$/;
 const PUBLIC_APP_FILES =
   /^\/(?:manifest[\w-]*\.webmanifest|apple-touch-icon[\w-]*\.png|icon-[\w-]+\.png|favicon[\w.-]*)$/;
 
@@ -146,9 +150,31 @@ async function register(request: Request, env: Env): Promise<Response> {
   return json({ handle, credential, serverUrl: `https://${handle}.${env.BASE_DOMAIN}` });
 }
 
+async function cloud(request: Request, path: string, url: URL, env: Env, token: string): Promise<Response> {
+  const headers = new Headers({ [PHONE_SESSION_HEADER]: token });
+  for (const name of ["accept", "content-type"]) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  if (hasBody && request.headers.get("origin") !== url.origin) return json({ error: "Wrong origin." }, 403);
+  const response = await fetch(new URL(`/api/connect/cloud/${path}${url.search}`, env.WEBSITE_URL), {
+    method: request.method,
+    headers,
+    body: hasBody ? request.body : undefined,
+    redirect: "manual",
+  }).catch(() => null);
+  return response ?? json({ error: "Cloudroom is unreachable. Try again." }, 502);
+}
+
 async function apex(request: Request, url: URL, env: Env): Promise<Response> {
   if (request.method === "POST" && url.pathname === "/api/register") {
     return register(request, env);
+  }
+  if (request.method === "GET" && url.pathname === "/api/phone-session") {
+    const token = bearer(request);
+    const userId = TOKEN.test(token) ? await phoneUser(env.DB, token) : null;
+    return userId ? json({ userId }) : json({ error: "Unknown phone." }, 401);
   }
   if (request.method === "POST" && url.pathname.startsWith("/api/")) {
     const server = await serverByCredential(env.DB, bearer(request));
@@ -177,9 +203,9 @@ async function apex(request: Request, url: URL, env: Env): Promise<Response> {
   return text("Not found\n", 404);
 }
 
-async function currentSession(request: Request, env: Env): Promise<Session | null> {
+function sessionToken(request: Request): string | null {
   const token = readCookie(request.headers.get("cookie"), SESSION_COOKIE);
-  return token && /^[a-f0-9]{64}$/.test(token) ? sessionByToken(env.DB, token) : null;
+  return token && TOKEN.test(token) ? token : null;
 }
 
 function serverOrigin(server: Server, target: string | null, env: Env): string {
@@ -223,8 +249,15 @@ async function visitor(
     return redirect(safeReturnPath(url.searchParams.get("return")), sessionCookie(token));
   }
 
-  const session = await currentSession(request, env);
+  const token = sessionToken(request);
+  const session: Session | null = token ? await sessionByToken(env.DB, token) : null;
   const signedIn = session?.serverId === server.id && session.target === target;
+
+  const cloudPath = CLOUD_PATH.exec(url.pathname)?.[1];
+  if (cloudPath !== undefined) {
+    if (!signedIn || target !== null || !token) return json({ error: "Sign in required." }, 401);
+    return cloud(request, cloudPath, url, env, token);
+  }
 
   if (url.pathname === "/__share") {
     const port = url.searchParams.get("port") ?? "";

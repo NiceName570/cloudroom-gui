@@ -327,12 +327,17 @@ export async function resolveExistingThreadExecutionPlan(
     reasoningLevel,
   );
 
+  const supportsServiceTier =
+    deps.providerRegistry.get(thread.providerId)?.info.capabilities
+      .supportsServiceTier ?? true;
   const serviceTier = resolveFieldWithDefault<ServiceTier>(
-    [
-      args.input.serviceTier?.value,
-      lastExecution?.serviceTier,
-      projectExecution?.serviceTier,
-    ],
+    supportsServiceTier
+      ? [
+          args.input.serviceTier?.value,
+          lastExecution?.serviceTier,
+          projectExecution?.serviceTier,
+        ]
+      : [args.input.serviceTier?.value],
     DEFAULT_SERVICE_TIER,
   );
 

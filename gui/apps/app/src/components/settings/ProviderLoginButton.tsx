@@ -18,11 +18,13 @@ function closeTerminal(terminalId: string | null): void {
 }
 
 export function ProviderLoginButton({
+  className,
   command,
   displayName,
   hostId,
   onDone,
 }: {
+  className?: string;
   command: string;
   displayName: string;
   hostId: string;
@@ -65,7 +67,14 @@ export function ProviderLoginButton({
 
   return (
     <>
-      <Button variant="outline" size="sm" disabled={starting} onClick={start}>
+      <Button
+        variant="outline"
+        size="sm"
+        className={className}
+        aria-label={`Log in to ${displayName}`}
+        disabled={starting}
+        onClick={start}
+      >
         {starting ? "Starting…" : "Log in"}
       </Button>
       <PersistentResponsiveDrawerShell

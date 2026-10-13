@@ -22,6 +22,16 @@ export function openTeleportLogin(error: unknown, providerId: string): boolean {
   else return false;
   return true;
 }
+export function useCloudLogin(provider: "codex" | "cursor") {
+  const account = useCloudroomAccount();
+  return useQuery({
+    queryKey: [`cloudroom-${provider}-auth`, account.data?.account?.id],
+    enabled: account.data?.ready === true,
+    queryFn: ({ signal }) => provider === "cursor" ? sdk.cloudroom.cursorAuth(signal) : sdk.cloudroom.codexAuth(signal),
+    retry: false,
+    staleTime: 60_000,
+  });
+}
 export function CodexConnectionPanel() { return <ConnectionPanel provider="codex" />; }
 export function CursorConnectionPanel() { return <ConnectionPanel provider="cursor" />; }
 function ConnectionPanel({ provider }: { provider: "codex" | "cursor" }) {

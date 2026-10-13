@@ -2,6 +2,18 @@
 
 Also on [cloudroom.dev/changelog](https://www.cloudroom.dev/changelog).
 
+## 101
+
+Phone app with your Mac off (2026-10-12)
+
+### Changes
+
+- Use the phone app even when your Mac is off. It shows the same chat screens as the desktop.
+- Cloud subagents now get their own sandbox.
+- Settings → Providers shows every agent in one table, with sign-in, Cloud login, and updates.
+- Switching agents in a thread works again, and Automations shows Local and Cloud in one list.
+- A Report a bug button in the thread header, plus fixes for setup and Teleport to Local. Security fixes.
+
 ## 100
 
 Hermes in Cloud, smoother setup (2026-10-11)

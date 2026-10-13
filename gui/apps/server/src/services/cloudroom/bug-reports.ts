@@ -3,7 +3,7 @@ import { readOrCreateSecretFile } from "@cloudroom/secret-storage";
 import { getAppSettings, getThread } from "@cloudroom/db";
 import type { AppDeps } from "../../types.js";
 import { ApiError } from "../../errors.js";
-import { cloudroom } from "./commands.js";
+import { cloudroom, configuredWebsite } from "./commands.js";
 
 /** A Local agent's report of a Cloudroom bug (ADR 0158). Signed-out apps report anonymously with the telemetry install ID. */
 export async function reportBug(deps: AppDeps, input: { message: string; threadId?: string }): Promise<{ sent: boolean }> {
@@ -15,7 +15,7 @@ export async function reportBug(deps: AppDeps, input: { message: string; threadI
     ...(thread ? { thread: thread.id, project: thread.projectId, provider: thread.providerId, model: thread.modelOverride, target: thread.executionTarget } : {}),
   };
   const installId = await readOrCreateSecretFile({ bytes: 16, dataDir: deps.config.dataDir, encoding: "hex", fileName: "telemetry-id" });
-  const response = await fetch(`${account?.website ?? "https://www.cloudroom.dev"}/api/desktop/bug-reports`, {
+  const response = await fetch(`${account?.website ?? configuredWebsite()}/api/desktop/bug-reports`, {
     method: "POST", redirect: "error", signal: AbortSignal.timeout(10_000),
     headers: { "Content-Type": "application/json", ...(account ? { Authorization: `Basic ${Buffer.from(`${account.userId}:${account.token}`).toString("base64")}` } : {}) },
     body: JSON.stringify({ message: input.message, context, installId }),

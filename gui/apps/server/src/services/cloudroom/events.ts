@@ -57,7 +57,8 @@ function childNotice(db: DbQueryConnection, saved: Binding, request: Command, te
   if (!match) return { initiator: "user" };
   const [, title, titledId, untitledId, state] = match;
   const sessionId = (titledId ?? untitledId)!;
-  const child = db.select({ threadId: cloudroomThreads.threadId }).from(cloudroomThreads)
+  // A child in a sandbox of its own (ADR 0229) is named by its thread ID.
+  const child = sessionId.startsWith("thr_") ? { threadId: sessionId } : db.select({ threadId: cloudroomThreads.threadId }).from(cloudroomThreads)
     .where(and(eq(cloudroomThreads.coreUrl, saved.coreUrl), eq(cloudroomThreads.sessionId, sessionId))).get();
   return {
     initiator: "system",
@@ -320,7 +321,7 @@ export function projectRecord(db: DbConnection, threadId: string, record: Sessio
       }
     }
     const recordTurn = typeof data.request_id === "string" ? data.request_id : saved.turnId;
-    if (harness === "pi" && record.native && record.kind !== "native_record" && saved.nativeId && recordTurn) {
+    if (harness === "pi" && record.native && record.kind !== "native_record" && saved.nativeId && recordTurn && turnStarted(tx, threadId, recordTurn)) {
       const frame = object.parse(JSON.parse(record.native));
       const base = { threadId, providerThreadId: saved.nativeId, scope: turnScope(recordTurn) };
       const latestMessage = () => tx.select({ id: events.itemId }).from(events).where(and(eq(events.threadId, threadId), eq(events.turnId, recordTurn), eq(events.type, "item/started"), eq(events.itemKind, "agentMessage"))).orderBy(desc(events.sequence)).limit(1).get()?.id;
@@ -373,7 +374,7 @@ export function projectRecord(db: DbConnection, threadId: string, record: Sessio
         } });
       }
     }
-    if (isAcpProvider(harness) && saved.nativeId && recordTurn && data.harness === CLOUD_HARNESSES[harness]) {
+    if (isAcpProvider(harness) && saved.nativeId && recordTurn && data.harness === CLOUD_HARNESSES[harness] && turnStarted(tx, threadId, recordTurn)) {
       const base = { threadId, providerThreadId: saved.nativeId, scope: turnScope(recordTurn) };
       const itemId = `${recordTurn}:${String(data.item_id)}`;
       if (record.kind === "text_delta" || record.kind === "thinking_delta") {

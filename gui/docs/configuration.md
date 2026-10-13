@@ -303,6 +303,13 @@ provider new threads use when neither the caller nor the project chose one
 `bb settings general providerOrder '["claude-code","codex"]'` and
 `bb settings general defaultProviderId claude-code` (or `null`).
 
+Each provider row also shows its login on this Mac and in the Cloud (Log in or
+Connect when missing), its CLI version, the Auto-update switch
+(`providerAutoUpdate`), and its update status (Update, Retry, or a check).
+Agents that can be installed but are not appear under "Not installed" with an
+Install button. Settings → Updates covers Cloudroom itself and other machines'
+CLIs; it links here for this Mac's agents.
+
 The "Collapse finished turns" switches in Settings → Providers choose, per
 provider, how a finished turn appears in the thread timeline. Collapsed, the
 turn's work folds into one "Worked for" row and the final answer stays

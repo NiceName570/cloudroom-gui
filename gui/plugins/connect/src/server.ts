@@ -24,7 +24,7 @@ import {
 } from "./types.js";
 
 const RELAY_CREDENTIAL_KV_KEY = "relay-credential";
-const RELAY_BASE_URL = "https://cloudroom.run";
+const RELAY_BASE_URL = process.env.CLOUDROOM_CONNECT_URL ?? "https://cloudroom.run";
 
 function recentlyRemote(status: TunnelStatus): boolean {
   return (

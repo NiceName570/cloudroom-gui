@@ -22,6 +22,9 @@ export interface ResponsiveOverlayContextValue {
 
 const RESPONSIVE_DRAWER_REALIZE_FALLBACK_MS = 120;
 
+export const FLOATING_DRAWER_CLASS_NAME =
+  "inset-x-2 bottom-2 rounded-[2.75rem] shadow-[0_18px_50px_rgb(0_0_0/0.28)] [--bb-drawer-closed-offset:4rem]";
+
 export const COMPACT_SHEET_CONTENT_STYLE: React.CSSProperties = {
   width: "auto",
   minWidth: "auto",
@@ -789,7 +792,9 @@ export function PersistentResponsiveDrawerShell({
           contentClassName,
         )}
         style={{
-          transform: open ? "translate3d(0, 0, 0)" : "translate3d(0, 100%, 0)",
+          transform: open
+            ? "translate3d(0, 0, 0)"
+            : "translate3d(0, calc(100% + var(--bb-drawer-closed-offset, 0px)), 0)",
           transition,
           willChange: open ? "transform" : undefined,
         }}

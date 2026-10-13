@@ -56,9 +56,11 @@ function ago(at: number): string {
   return `${Math.floor(hours / 24)} days ago`;
 }
 
+export const OFFLINE_HEADER = "x-cloudroom-offline";
+
 export function offlinePage(lastSeenAt: number | null): Response {
   const lastSeen = lastSeenAt === null ? "" : ` It was last online ${ago(lastSeenAt)}.`;
-  return page(
+  const response = page(
     `<h1>Your Mac is offline</h1>
      <p>Open Cloudroom on your Mac and keep it awake.${escapeHtml(lastSeen)}</p>
      <p class="note">This page retries by itself.</p>
@@ -66,6 +68,8 @@ export function offlinePage(lastSeenAt: number | null): Response {
     503,
     10,
   );
+  response.headers.set(OFFLINE_HEADER, "1");
+  return response;
 }
 
 export function messagePage(title: string, message: string, status: number): Response {

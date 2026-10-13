@@ -73,6 +73,7 @@ function formatCronCadence(cron: string): string {
     )
     .replace(/ through /g, "-")
     .replace(/,? only on /g, " ")
+    .replace(/ in a month\b/g, "")
     .replace(/,? and /g, ", ")
     .replace(/\bminutes?\b/g, "min")
     .replace(/\bseconds?\b/g, "sec")
@@ -115,6 +116,15 @@ export function oneShotLifecycleAllowsToggle(
 
 export function formatScheduleRunTime(timestamp: number): string {
   return SCHEDULE_RUN_FORMATTER.format(new Date(timestamp));
+}
+
+export function formatTimeUntil(timestamp: number, now = Date.now()): string {
+  const minutes = Math.ceil((timestamp - now) / 60_000);
+  if (minutes <= 0) return "now";
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours >= 24) return `in ${Math.round(hours / 24)}d`;
+  return minutes % 60 === 0 ? `in ${hours}h` : `in ${hours}h ${minutes % 60}m`;
 }
 
 export function formatScheduleStatusLabel({

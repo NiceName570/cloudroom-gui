@@ -1,6 +1,7 @@
 import {
   findStoredEventRow,
   getLastStoredTurnRequestEvent,
+  getLatestCompletedThreadContextClearSequence,
   getThread,
 } from "@cloudroom/db";
 import type { DbQueryConnection } from "@cloudroom/db";
@@ -34,12 +35,21 @@ export function getLeadingAgentOnlyInput(input: PromptInput[]): PromptInput[] {
   );
 }
 
-/** Agent-only input the next turn must carry: a spawned thread's seed, or the conversation before a harness switch. */
+/** Agent-only input the next turn must carry: the newest of a spawn/retry seed and a harness switch seed, unless context was cleared after it. */
 export function resolveDeferredFirstTurnContext(
   db: DbQueryConnection,
   threadId: string,
 ): DeferredFirstTurnContext | null {
-  return spawnSeedContext(db, threadId) ?? pendingHarnessSwitchSeed(db, threadId);
+  const cleared =
+    getLatestCompletedThreadContextClearSequence(db, { threadId }) ?? 0;
+  return (
+    [spawnSeedContext(db, threadId), pendingHarnessSwitchSeed(db, threadId)]
+      .filter(
+        (context): context is DeferredFirstTurnContext =>
+          context !== null && context.requestSequence > cleared,
+      )
+      .sort((a, b) => b.requestSequence - a.requestSequence)[0] ?? null
+  );
 }
 
 function spawnSeedContext(

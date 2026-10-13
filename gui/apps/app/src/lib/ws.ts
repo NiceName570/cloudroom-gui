@@ -87,13 +87,20 @@ export class WebSocketManager {
   private disconnectedAt: number | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private pongTimer: ReturnType<typeof setTimeout> | null = null;
+  private socketless = false;
 
   constructor(browserEvents?: WebSocketManagerBrowserEvents) {
     this.browserEvents = browserEvents ?? createDefaultBrowserEvents();
   }
 
+  runWithoutSocket(): void {
+    this.socketless = true;
+    this.hasConnected = true;
+    this.setConnectionState("connected");
+  }
+
   connect(): void {
-    if (this.socket) return;
+    if (this.socket || this.socketless) return;
 
     const url = buildBrowserWebSocketUrl("/ws");
 

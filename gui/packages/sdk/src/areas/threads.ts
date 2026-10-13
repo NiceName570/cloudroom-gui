@@ -653,6 +653,7 @@ function updateJson(args: ThreadUpdateArgs): UpdateThreadRequest {
     title: args.title,
     sectionId: args.sectionId,
     parentThreadId: args.parentThreadId,
+    providerId: args.providerId,
     model: args.model,
     reasoningLevel: args.reasoningLevel,
     visibility: args.visibility,

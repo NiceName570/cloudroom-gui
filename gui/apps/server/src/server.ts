@@ -190,7 +190,7 @@ function staticCacheControlForPath(urlPath: string): string {
   if (urlPath.startsWith("/assets/")) {
     return STATIC_ASSET_CACHE_CONTROL;
   }
-  if (urlPath.endsWith(".html")) {
+  if (urlPath.endsWith(".html") || urlPath === "/sw.js") {
     return STATIC_INDEX_CACHE_CONTROL;
   }
   return STATIC_PUBLIC_FILE_CACHE_CONTROL;

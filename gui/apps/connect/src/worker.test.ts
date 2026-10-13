@@ -4,7 +4,8 @@ import { build } from "esbuild";
 import { Miniflare, Response as MiniflareResponse } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { decodeFrame, encodeFrame, type Frame } from "@cloudroom/tunnel-contract";
-import { GATE_AUTH_HEADER, SESSION_COOKIE, TUNNEL_TARGET_HEADER } from "./protocol-headers";
+import { OFFLINE_HEADER } from "./pages";
+import { GATE_AUTH_HEADER, PHONE_SESSION_HEADER, SESSION_COOKIE, TUNNEL_TARGET_HEADER } from "./protocol-headers";
 import { parseVisitorHost, safeReturnPath } from "./worker";
 
 type ClientWebSocket = NonNullable<
@@ -16,7 +17,7 @@ const INSTALL_ID = "0123456789abcdef0123456789abcdef";
 const DESKTOP_AUTH = `Basic ${Buffer.from("user:token").toString("base64")}`;
 const HTML = { accept: "text/html" };
 const seen: { path: string; headers: Record<string, string>; target?: string }[] = [];
-let website: () => MiniflareResponse = () => MiniflareResponse.json({ userId: "user-1" });
+let website: (request: Request) => MiniflareResponse = () => MiniflareResponse.json({ userId: "user-1" });
 let mf: Miniflare;
 let tunnel: ClientWebSocket;
 let handle: string;
@@ -121,7 +122,7 @@ beforeAll(async () => {
     durableObjects: { TUNNEL_DO: "TunnelDO" },
     d1Databases: { DB: "relay-test" },
     bindings: { BASE_DOMAIN: BASE, WEBSITE_URL: "https://website.test" },
-    outboundService: () => website(),
+    outboundService: (request: unknown) => website(request as Request),
   });
   const db = await mf.getD1Database("DB");
   const migration = readFileSync(
@@ -234,6 +235,43 @@ describe("Cloudroom Connect relay", () => {
     expect(after.status).toBe(401);
   });
 
+  it("passes a signed-in phone's cloud requests to the website with its session", async () => {
+    const cookie = await signInPhone();
+    const token = cookie.slice(`${SESSION_COOKIE}=`.length);
+    let forwarded: { url: string; method: string; session: string | null; body: string } | null = null;
+    website = (request) => {
+      forwarded = { url: request.url, method: request.method, session: request.headers.get(PHONE_SESSION_HEADER), body: "" };
+      return MiniflareResponse.json({ threads: [] });
+    };
+    const response = await fetchRelay(`https://${handle}.${BASE}/__cloud/threads?x=1`, { headers: { cookie } });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ threads: [] });
+    expect(forwarded).toEqual({ url: "https://website.test/api/connect/cloud/threads?x=1", method: "GET", session: token, body: "" });
+    const post = (origin: string) => fetchRelay(`https://${handle}.${BASE}/__cloud/threads/thr_a`, {
+      method: "POST",
+      headers: { cookie, origin, "content-type": "application/json" },
+      body: JSON.stringify({ action: "stop" }),
+    });
+    expect((await post("https://evil.test")).status).toBe(403);
+    expect((await post(`https://${handle}.${BASE}`)).status).toBe(200);
+    expect(forwarded).toMatchObject({ url: "https://website.test/api/connect/cloud/threads/thr_a", method: "POST", session: token });
+    const anonymous = await fetchRelay(`https://${handle}.${BASE}/__cloud/threads`);
+    expect(anonymous.status).toBe(401);
+    const encoded = await fetchRelay(`https://${handle}.${BASE}/__cloud/threads%2F..%2Fadmin`, { headers: { cookie } });
+    expect(encoded.status).toBe(404);
+    website = () => MiniflareResponse.json({ userId: "user-1" });
+  });
+
+  it("tells the website whose phone session it is, for app sessions only", async () => {
+    const token = (await signInPhone()).slice(`${SESSION_COOKIE}=`.length);
+    const known = await fetchRelay(`https://${BASE}/api/phone-session`, { headers: { authorization: `Bearer ${token}` } });
+    expect(await known.json()).toEqual({ userId: "user-1" });
+    const unknown = await fetchRelay(`https://${BASE}/api/phone-session`, { headers: { authorization: `Bearer ${"0".repeat(64)}` } });
+    expect(unknown.status).toBe(401);
+    const garbage = await fetchRelay(`https://${BASE}/api/phone-session`, { headers: { authorization: "Bearer nope" } });
+    expect(garbage.status).toBe(401);
+  });
+
   it("shows the offline page when the Mac is not connected", async () => {
     const cookie = await signInPhone();
     tunnel.close();
@@ -242,6 +280,7 @@ describe("Cloudroom Connect relay", () => {
       headers: { ...HTML, cookie },
     });
     expect(page.status).toBe(503);
+    expect(page.headers.get(OFFLINE_HEADER)).toBe("1");
     expect(await page.text()).toContain("Your Mac is offline");
   });
 });

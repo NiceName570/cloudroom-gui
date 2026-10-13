@@ -2629,8 +2629,9 @@ async function runDesktopApp(): Promise<void> {
     isQuitting() {
       return quitting;
     },
+    // Only web and mail links. A cloudroom:// link clicked in the app would come straight back to it.
     openExternalUrl(openArgs) {
-      void shell.openExternal(openArgs.url);
+      if (/^(https?|mailto):/i.test(openArgs.url)) void shell.openExternal(openArgs.url);
     },
     preloadPath,
     userDataPath,

@@ -30,6 +30,7 @@ import {
   automationRunListResponseSchema,
   automationsOverviewResponseSchema,
   type AgentExecutionUpdate,
+  type AutomationAgentSummary,
   type AutomationExecution,
   type AutomationReadProblem,
   type AutomationReadResult,
@@ -53,13 +54,15 @@ import {
   deleteAutomationScriptDir,
   deleteAutomationScriptFile,
   readAutomationScript,
+  scriptAgents,
   writeInlineAutomationScript,
 } from "./script-files.js";
 import { errorMessage, executeAgentRun, executeScriptRun } from "./run.js";
 
 type ServiceApi = Pick<BbPluginApi, "realtime" | "log"> & {
   sdk: {
-    projects: Pick<BbPluginApi["sdk"]["projects"], "get" | "list">;
+    projects: Pick<BbPluginApi["sdk"]["projects"], "get" | "list"> &
+      Partial<Pick<BbPluginApi["sdk"]["projects"], "defaultExecutionOptions">>;
     providers: Pick<BbPluginApi["sdk"]["providers"], "list">;
     threads: Pick<BbPluginApi["sdk"]["threads"], "get" | "send" | "spawn">;
   };
@@ -203,6 +206,45 @@ function withStoredScriptPath(
       ),
     },
   };
+}
+
+type ProjectExecutionDefaults = Awaited<
+  ReturnType<BbPluginApi["sdk"]["projects"]["defaultExecutionOptions"]>
+>;
+
+async function overviewScriptAgents(
+  pluginDataDir: string,
+  automation: AutomationReadResult,
+  projectDefaults: (projectId: string) => Promise<ProjectExecutionDefaults>,
+): Promise<AutomationAgentSummary[] | undefined> {
+  if ("problem" in automation || automation.execution.mode !== "script") {
+    return undefined;
+  }
+  const { script, scriptFile } = automation.execution;
+  const source =
+    script ??
+    (scriptFile === undefined
+      ? ""
+      : await readAutomationScript({
+          dataDir: pluginDataDir,
+          automationId: automation.id,
+          scriptFile,
+        }).catch(() => ""));
+  const agents = scriptAgents(source);
+  if (agents.every((agent) => !Object.values(agent).includes(null))) {
+    return agents;
+  }
+  const defaults = await projectDefaults(automation.projectId);
+  if (defaults === null) return agents;
+  return agents.map((agent) =>
+    (agent.providerId ?? defaults.providerId) === defaults.providerId
+      ? {
+          providerId: defaults.providerId,
+          model: agent.model ?? defaults.model,
+          reasoningLevel: agent.reasoningLevel ?? defaults.reasoningLevel,
+        }
+      : agent,
+  );
 }
 
 function toStoredAutomationResponse(
@@ -463,16 +505,37 @@ export function createAutomationService(args: {
   return {
     async overview() {
       const projects = await projectNameById(bb);
+      const defaultsByProject = new Map<
+        string,
+        Promise<ProjectExecutionDefaults>
+      >();
+      const projectDefaults = (projectId: string) => {
+        const cached =
+          defaultsByProject.get(projectId) ??
+          (
+            bb.sdk.projects.defaultExecutionOptions?.({ projectId }) ??
+            Promise.resolve(null)
+          ).catch(() => null);
+        defaultsByProject.set(projectId, cached);
+        return cached;
+      };
       const automations: AutomationsOverviewResponse["automations"] = [];
       for (const row of listAllAutomations(db)) {
         const projectName = projects.get(row.projectId);
         if (projects.size > 0 && projectName === undefined) continue;
+        const automation = toStoredAutomationReadResult(bb, pluginDataDir, row);
+        const agents = await overviewScriptAgents(
+          pluginDataDir,
+          automation,
+          projectDefaults,
+        );
         automations.push({
-          automation: toStoredAutomationReadResult(bb, pluginDataDir, row),
+          automation,
           project: {
             id: row.projectId,
             name: projectName ?? row.projectId,
           },
+          ...(agents === undefined ? {} : { scriptAgents: agents }),
         });
       }
       return automationsOverviewResponseSchema.parse({ automations });

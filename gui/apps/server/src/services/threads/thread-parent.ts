@@ -74,6 +74,8 @@ interface IsLiveParentThreadArgs {
 interface AssertValidParentThreadArgs {
   childThreadId?: string;
   parentThreadId: string;
+  /** A Cloud child in a sandbox of its own may have a Cloud parent (ADR 0228). */
+  cloudChild?: boolean;
 }
 
 interface ResolveParentDepthArgs {
@@ -169,7 +171,7 @@ export function assertValidParentThread(
   args: AssertValidParentThreadArgs,
 ): Thread {
   const parentThread = getThread(deps.db, args.parentThreadId);
-  if (teleportBlocked(deps.db, args.parentThreadId) || parentThread?.executionTarget === "cloud") throw new ApiError(409, "teleport_in_progress", "Local children cannot start during or after Teleport.");
+  if (teleportBlocked(deps.db, args.parentThreadId) || (parentThread?.executionTarget === "cloud" && !args.cloudChild)) throw new ApiError(409, "teleport_in_progress", "Local children cannot start during or after Teleport.");
   if (parentThread === null) {
     throwParentThreadInvalid("not_found");
   }

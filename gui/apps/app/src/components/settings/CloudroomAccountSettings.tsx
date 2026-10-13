@@ -8,18 +8,10 @@ import { SETTINGS_CARD_CLASS, SETTINGS_CARD_ROW_CLASS, SettingsSection } from "@
 import { sdk } from "@/lib/sdk";
 import { openUrlInExternalBrowser } from "@/lib/url-open-routing";
 import { useCloudroomAccount } from "@/hooks/queries/cloudroom-queries";
-import { useSystemProviders } from "@/hooks/queries/system-queries";
 import { MacAccessMenuItems, useMacAccessLevel } from "@/components/sidebar/MacAccessChip";
-import { openCodexConnection, openCursorConnection } from "@/components/CodexConnectionPanel";
 import { FixPrompt } from "@/components/ui/fix-prompt";
 import { cloudUnavailableFixPrompt, syncFixPrompt } from "@/lib/fix-prompts";
-import { getProviderIconInfo, getProviderIconTintStyle } from "@/lib/provider-icon";
 import { SelfHostedCoreForm } from "./SelfHostedCoreForm";
-
-const AGENT_LOGINS = [
-  { id: "codex", name: "Codex", open: openCodexConnection },
-  { id: "acp-cursor", name: "Cursor", open: openCursorConnection },
-] as const;
 
 function useRefreshCloudroom() {
   const queryClient = useQueryClient();
@@ -86,7 +78,6 @@ export function CloudroomAccountSettings() {
     </SettingsSection>}
     {signedIn && <BillingRow />}
     {signedIn && <MacAccessRow />}
-    {ready && <SettingsSection plain title="Agent logins" description="Cloud provider logins stay on your VM."><AgentLogins /></SettingsSection>}
   </>;
 }
 
@@ -125,21 +116,6 @@ function MacAccessRow() {
         <DropdownMenuContent align="end" mobileTitle="Mac access" className="w-72 p-1.5"><MacAccessMenuItems current={current} select={select} /></DropdownMenuContent>
       </DropdownMenu>
     </div>
-  </div>;
-}
-
-function AgentLogins() {
-  const providers = useSystemProviders().data;
-  return <div className={SETTINGS_CARD_CLASS}>
-    {AGENT_LOGINS.map(({ id, name, open }) => {
-      const provider = providers?.find((entry) => entry.id === id);
-      const Logo = getProviderIconInfo("agent", id, provider ?? null).icon;
-      return <div key={id} className={SETTINGS_CARD_ROW_CLASS}>
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-border bg-background text-foreground" style={provider && getProviderIconTintStyle(provider)}><Logo className="size-4" /></span>
-        <span className="min-w-0 flex-1 truncate text-foreground">{name}</span>
-        <Button variant="ghost" size="sm" className="text-muted-foreground" aria-label={`Manage ${name} connection`} onClick={() => open()}>Manage<Icon name="ChevronRight" aria-hidden /></Button>
-      </div>;
-    })}
   </div>;
 }
 

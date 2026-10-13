@@ -492,8 +492,9 @@ The canonical release summary.
     expect(screen.queryByText("Primary")).toBeNull();
     expect(screen.queryByText("This machine")).toBeNull();
     expect(screen.getByRole("heading", { name: /studio-mac/ })).toBeDefined();
-    expect(screen.getAllByText("Codex")).toHaveLength(2);
-    expect(screen.getAllByText("Claude Code")).toHaveLength(2);
+    expect(screen.getAllByText("Codex")).toHaveLength(1);
+    expect(screen.getAllByText("Claude Code")).toHaveLength(1);
+    expect(screen.getAllByText("Agent CLIs")).toHaveLength(1);
     expect(screen.queryByText(/Checked/)).toBeNull();
     expect(screen.queryByText(/ago$/)).toBeNull();
     expect(screen.queryByText(/^In sync$/)).toBeNull();
@@ -942,7 +943,7 @@ The canonical release summary.
     ).toBeDefined();
   });
 
-  it("shows installed provider CLIs including up-to-date rows", async () => {
+  it("shows another machine's provider CLIs including up-to-date rows", async () => {
     useDesktopUpdateInfoMock.mockReturnValue({
       desktopApi: null,
       desktopInfo: null,
@@ -953,7 +954,7 @@ The canonical release summary.
     useUpdateInventoryMock.mockReturnValue(
       makeInventory({
         machines: [
-          makeMachine({ host, issues: [codexIssue], isPrimary: true }),
+          makeMachine({ host, issues: [codexIssue] }),
         ],
       }),
     );

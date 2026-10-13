@@ -123,6 +123,7 @@ const DropdownMenuContent = React.forwardRef<
   HTMLDivElement,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
     mobileTitle?: string;
+    mobileClassName?: string;
   }
 >(
   (
@@ -131,6 +132,7 @@ const DropdownMenuContent = React.forwardRef<
       sideOffset = 4,
       children,
       mobileTitle,
+      mobileClassName,
       onCloseAutoFocus,
       ...props
     },
@@ -146,6 +148,7 @@ const DropdownMenuContent = React.forwardRef<
           open={open}
           onOpenChange={onOpenChange}
           srLabel={mobileTitle ?? "Menu"}
+          contentClassName={mobileClassName}
         >
           <div
             ref={ref}

@@ -646,15 +646,16 @@ describe("ModelReasoningPicker", () => {
     expect(menu.textContent).not.toContain("Medium");
   });
 
-  it("leaves compact drawer height and scrolling to the responsive shell", async () => {
+  it("keeps the compact floating card short by scrolling the model list", async () => {
     renderPicker({ compact: true, modelOptions: manyCodexModels });
 
     fireEvent.click(screen.getByRole("button", { name: "Provider and model" }));
 
     expect(screen.getByRole("dialog").className).not.toContain("100dvh");
-    expect(
-      (await screen.findByRole("listbox", { name: "Models" })).className,
-    ).not.toContain("max-h-");
+    expect(screen.getByRole("dialog").className).toContain("inset-x-2");
+    const models = await screen.findByRole("listbox", { name: "Models" });
+    expect(models.className).toContain("max-h-[15.25rem]");
+    expect(models.className).toContain("overflow-y-auto");
   });
 
   it("commits a provider tab immediately and keeps its models selectable", async () => {

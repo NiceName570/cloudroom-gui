@@ -94,6 +94,19 @@ export async function startCloudFork(
   return { sessionId, transfer, code };
 }
 
+export const CHILD_HINT = "[Cloud child]\nYou run in your own sandbox. Cloudroom is copying your parent thread's code (its commits and uncommitted changes) into this folder. Run `cloudroom files wait` before you read or change files; it returns once the code lands. Never recreate missing files.";
+
+/** A Cloud parent's code (its branch plus uncommitted changes) for a child in a sandbox of its own (ADR 0229),
+ *  applied with `landForkCode` like a fork's. Null when the parent's folder has no Git history. */
+export async function threadCode(deps: Parameters<typeof cloudroom>[0], threadId: string, id: string): Promise<Buffer | Error | null> {
+  try {
+    const source = binding(deps.db, threadId);
+    if (!source?.sessionId) return null;
+    const from = await cloudroom(deps).threadClient(threadId);
+    return await sourceCode(from, (await from.sessionWorkspace(source.sessionId)).path, id);
+  } catch (error) { return error instanceof Error ? error : new Error(String(error)); }
+}
+
 /** A fork's first message is a native fork (a rewind), which needs the resumed agent to be idle. */
 async function idle(client: CloudroomClient, sessionId: string): Promise<void> {
   for (let tries = 0; ; tries++) {
@@ -137,7 +150,8 @@ export async function landForkCode(client: CloudroomClient, started: { sessionId
   }
 }
 
-/** Moves the fork's branch to the source's commit and leaves the source's uncommitted changes uncommitted. */
+/** Moves the fork's branch to the source's commit and leaves the source's uncommitted changes uncommitted, unless
+ *  the folder already has changes. */
 async function applyForkCode(client: CloudroomClient, workspace: string, id: string, bundle: Buffer): Promise<void> {
   const file = `.cache/cloudroom/${id}.bundle`;
   for (let offset = 0; offset < bundle.length; offset += UPLOAD_PART) {
@@ -147,6 +161,8 @@ async function applyForkCode(client: CloudroomClient, workspace: string, id: str
   }
   await vm(client, [
     `cd ${quote(workspace)} && git rev-parse --git-dir >/dev/null 2>&1 || { echo 'The project folder has no Git repository.' >&2; rm -f ~/${file}; exit 1; }`,
+    // Never reset over work the agent already did here: keep it and say why the code was not copied.
+    `if git rev-parse -q --verify HEAD >/dev/null && ! git diff --quiet HEAD; then echo 'The folder already had changes, so they were kept and the code was not copied in' >&2; rm -f ~/${file}; exit 1; fi`,
     `{ git fetch -q ~/${file} refs/cloudroom/${id} 2>/dev/null || { git fetch -q origin; git fetch -q ~/${file} refs/cloudroom/${id}; }; } && git reset -q --hard FETCH_HEAD && git reset -q HEAD~1`,
     `code=$?; rm -f ~/${file}; exit $code`,
   ].join("\n"));

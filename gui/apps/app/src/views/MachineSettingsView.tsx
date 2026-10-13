@@ -449,7 +449,9 @@ export function MachineSettingsView() {
                   )}
                   {updateIssueCount > 0 ? (
                     <Link
-                      to={getSettingsRoutePath("updates")}
+                      to={getSettingsRoutePath(
+                        hostId === localDaemonHostId ? "providers" : "updates",
+                      )}
                       className="shrink-0 rounded outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       <Pill

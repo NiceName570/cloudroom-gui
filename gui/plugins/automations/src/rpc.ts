@@ -6,6 +6,7 @@ import {
   automationRunRpcResponseSchema,
   automationRunsInputSchema,
   automationsOverviewResponseSchema,
+  type AutomationAgentSummary,
   createAutomationInputSchema,
   listAutomationsInputSchema,
   projectAutomationInputSchema,
@@ -68,13 +69,55 @@ export const automationRpcContract = defineRpcContract({
   },
 });
 
-type Cloud = Pick<BbPluginApi, "sdk">["sdk"]["cloudroom"];
+type Sdk = Pick<BbPluginApi["sdk"], "cloudroom" | "threads">;
+type Cloud = Sdk["cloudroom"];
 
-export function createRpcHandlers(service: AutomationService, cloud?: Cloud) {
+async function cloudThreadAgent(
+  threads: Sdk["threads"],
+  threadId: string,
+): Promise<AutomationAgentSummary | null> {
+  try {
+    const [thread, options] = await Promise.all([
+      threads.get({ threadId }),
+      threads.defaultExecutionOptions({ threadId }),
+    ]);
+    return {
+      providerId: "providerId" in thread ? thread.providerId : null,
+      model: options?.model ?? null,
+      reasoningLevel: options?.reasoningLevel ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function withCloudAgents(threads: Sdk["threads"], result: unknown) {
+  const { automations = [] } = result as {
+    automations?: { thread_id: string }[];
+  };
   return {
-    cloud_automations(input: z.output<typeof cloudAutomationInputSchema>) {
-      if (!cloud) throw new Error("Cloud automations are unavailable.");
-      return cloud.automations(input as Parameters<Cloud["automations"]>[0]);
+    ...(result as object),
+    automations: await Promise.all(
+      automations.map(async (automation) => ({
+        ...automation,
+        agent: await cloudThreadAgent(threads, automation.thread_id),
+      })),
+    ),
+  };
+}
+
+export function createRpcHandlers(service: AutomationService, sdk?: Sdk) {
+  return {
+    async cloud_automations(
+      input: z.output<typeof cloudAutomationInputSchema>,
+    ) {
+      if (!sdk) throw new Error("Cloud automations are unavailable.");
+      const result = await sdk.cloudroom.automations(
+        input as Parameters<Cloud["automations"]>[0],
+      );
+      return input.action === "list"
+        ? withCloudAgents(sdk.threads, result)
+        : result;
     },
     automations_overview() {
       return service.overview();

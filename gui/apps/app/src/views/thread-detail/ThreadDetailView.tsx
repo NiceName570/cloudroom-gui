@@ -140,6 +140,7 @@ import {
   showMutationErrorToast,
 } from "@/lib/mutation-errors";
 import {
+  isPromptDraftEmpty,
   promptInputToDraft,
   type PromptDraftState,
 } from "@cloudroom/client-core";
@@ -149,6 +150,7 @@ import {
 } from "@/lib/browser-storage";
 import {
   getProjectComposeRoutePath,
+  getRootComposeRoutePath,
   getThreadRoutePath,
   isRoutePath,
   type ThreadRoutePathArgs,
@@ -215,6 +217,7 @@ import {
 import { ThreadTimelineNavigationProvider } from "@/components/thread/timeline/ThreadTimelineNavigationContext";
 import { usePluginSlots } from "@/lib/plugin-slots";
 import { getFileExtension } from "@/lib/plugin-slot-resolvers";
+import { Button } from "@cloudroom/shared-ui/button";
 import { Icon } from "@cloudroom/shared-ui/icon";
 import {
   getBbDesktopInfo,
@@ -323,6 +326,8 @@ const EMPTY_PROJECT_THREAD_SUBSET_FILTERS =
 const EMPTY_TERMINAL_SESSIONS: readonly TerminalSession[] = [];
 const DEFAULT_PULL_REQUEST_MERGE_METHOD: PullRequestMergeMethod = "merge";
 const PULL_REQUEST_MERGE_METHOD_STORAGE_KEY = "bb.pullRequest.mergeMethod";
+const REPORT_BUG_PROMPT =
+  "Using the 'feedback' tool you have, report the following thing to David, the founder of Cloudroom... ";
 
 function isPullRequestMergeMethod(
   value: string,
@@ -1023,6 +1028,17 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
   );
   const addQuoteToComposer = selectionPromptDraft.addQuote;
   const [composerFocusRequestNonce, setComposerFocusRequestNonce] = useState(0);
+  // Feedback #116: users could not find how to report bugs. Fill this composer when empty, else a new thread.
+  const reportBug = useCallback(() => {
+    if (isPromptDraftEmpty(selectionPromptDraft.getCurrent())) {
+      selectionPromptDraft.setDraft({ text: REPORT_BUG_PROMPT, mentions: [], attachments: [] });
+      setComposerFocusRequestNonce((nonce) => nonce + 1);
+      return;
+    }
+    void navigate(getRootComposeRoutePath(), {
+      state: { focusPrompt: true, initialPrompt: REPORT_BUG_PROMPT, replaceInitialPrompt: true },
+    });
+  }, [navigate, selectionPromptDraft]);
   const [sentMessageEditSession, setSentMessageEditSession] =
     useState<SentMessageEditSession | null>(null);
   const [sentMessageEditHostElement, setSentMessageEditHostElement] =
@@ -2576,7 +2592,21 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
           projectId={thread.projectId}
         />
       }
-      shareButton={<ThreadShareButton threadId={thread.id} />}
+      shareButton={
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+            onClick={reportBug}
+          >
+            <Icon name="Bug" className="size-3.5" />
+            Report a bug
+          </Button>
+          <ThreadShareButton threadId={thread.id} />
+        </>
+      }
       threadId={thread.id}
       threadTitle={threadTitle}
     />

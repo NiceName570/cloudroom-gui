@@ -47,6 +47,9 @@ const VIEWABLE = /\.(png|jpe?g|gif|webp|heic|svg|pdf|zip|txt|md|csv|json|mp4|mov
 const exec = promisify(execFile);
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
 const moving = new Set<string>();
+// Cloud files must never land in a .git folder, where Git runs hooks and config commands on the Mac.
+// Lowercase and NFC, because macOS treats ".GIT" as ".git".
+const inGit = (path: string) => path.normalize("NFC").toLowerCase().split(/[\\/]/).includes(".git");
 
 export const teleportingToLocal = (threadId: string) => moving.has(threadId);
 
@@ -87,7 +90,7 @@ async function run(deps: AppDeps, threadId: string): Promise<{ conflicts: number
   if (harness === "acp-cursor" || harness === "acp-opencode") await vm(client, `rm -f ${quote(vmPath)}`).catch(() => {});
   if (harness === "acp-opencode") await importOpenCode(deps, threadId, environment, nativeId, session);
   else await installNative(harness, nativeId, vmPath, session, environment.path);
-  const conflicts = await applyChanges(environment.path, changes.archive, randomUUID(), changes.proven);
+  const conflicts = await applyChanges(environment.path, changes.archive, randomUUID(), changes.base);
 
   const queued = cloudroom(deps).queue(threadId);
   deps.db.transaction((tx) => {
@@ -265,7 +268,7 @@ export async function download(client: CloudroomClient, path: string, maxMb = In
   return Buffer.concat(parts);
 }
 
-async function cloudChanges(client: CloudroomClient, workspace: string, localHead: string | null, since: number): Promise<{ archive: Buffer; proven: boolean }> {
+async function cloudChanges(client: CloudroomClient, workspace: string, localHead: string | null, since: number): Promise<{ archive: Buffer; base: string | null }> {
   const head = localHead?.trim();
   const archive = `.cache/cloudroom/teleport-local-${randomUUID()}.tgz`;
   const skipped = [...SKIPPED, ".cloudroom"].map((name) => `-name ${quote(name)}`).join(" -o ");
@@ -274,23 +277,23 @@ async function cloudChanges(client: CloudroomClient, workspace: string, localHea
     "mkdir -p ~/.cache/cloudroom",
     "if git rev-parse --git-dir >/dev/null 2>&1; then",
     "  proven=0; base=$(git reflog --format=%H HEAD 2>/dev/null | tail -n 1); [ -n \"$base\" ] || base=HEAD",
-    head && /^[0-9a-f]{40,64}$/.test(head) ? `  git cat-file -e '${head}^{commit}' 2>/dev/null && { base=${head}; proven=1; }` : "",
+    head && /^[0-9a-f]{40,64}$/.test(head) ? `  git cat-file -e '${head}^{commit}' 2>/dev/null && shared=$(git merge-base HEAD ${head} 2>/dev/null) && { base=$shared; proven=1; }` : "",
     `  { git diff -z --name-only --no-renames --diff-filter=d "$base"; git ls-files -z --others --exclude-standard; } | tar -czf ~/${archive} --null -T - || exit 1`,
     "else",
     `  proven=0; find . \\( ${skipped} \\) -prune -o \\( -type f -o -type l \\) -newermt @${Math.floor(since / 1000) - 600} -print0 | tar -czf ~/${archive} --null -T - || exit 1`,
     "fi",
-    `echo "$proven" ~/${archive}`,
+    `echo "$proven" "$base" ~/${archive}`,
   ].join("\n"))).toString().trim();
-  const [proven, path] = (created.split("\n").pop() ?? "").split(" ");
+  const [proven, base, path] = (created.split("\n").pop() ?? "").split(" ");
   if (!path) throw new Error("The cloud file changes could not be packed. The thread stays in Cloud.");
   try {
-    return { archive: await download(client, path), proven: proven === "1" };
+    return { archive: await download(client, path), base: proven === "1" && base && /^[0-9a-f]{40,64}$/.test(base) ? base : null };
   } finally {
     await vm(client, `rm -f ${quote(path)}`).catch(() => {});
   }
 }
 
-async function applyChanges(root: string, archive: Buffer, id: string, proven: boolean): Promise<number> {
+async function applyChanges(root: string, archive: Buffer, id: string, base: string | null): Promise<number> {
   const real = await realpath(root);
   const aside = join(root, ".cloudroom", "teleport", id);
   if (!(await inside(real, join(aside, "file"))))
@@ -303,9 +306,9 @@ async function applyChanges(root: string, archive: Buffer, id: string, proven: b
     await mkdir(staged);
     await exec("tar", ["-xzf", file, "-C", staged]);
     const paths = (await exec("tar", ["-tzf", file], { maxBuffer: 64 * 1024 * 1024 })).stdout.split("\n")
-      .map((path) => path.replace(/^\.\//, "")).filter((path) => path && !path.endsWith("/") && !isAbsolute(path) && !path.split("/").includes(".."));
+      .map((path) => path.replace(/^\.\//, "")).filter((path) => path && !path.endsWith("/") && !isAbsolute(path) && !path.split("/").includes("..") && !inGit(path));
     const top = (await git(root, ["rev-parse", "--show-toplevel"]))?.trim();
-    const dirty = proven && top && (await realpath(top).catch(() => null)) === real ? await dirtyPaths(root) : null;
+    const dirty = base && top && (await realpath(top).catch(() => null)) === real ? await dirtyPaths(root, base) : null;
     let conflicts = 0;
     for (const path of paths) {
       const incoming = join(staged, path);
@@ -330,13 +333,17 @@ async function inside(root: string, path: string): Promise<boolean> {
   let folder = dirname(path);
   while (!(await lstat(folder).catch(() => null))) folder = dirname(folder);
   const real = await realpath(folder).catch(() => null);
-  return real === root || !!real?.startsWith(root + sep);
+  // A symlink from an earlier teleport could still point into .git.
+  return !!real && (real === root || real.startsWith(root + sep)) && !inGit(real.slice(root.length));
 }
 
-async function dirtyPaths(root: string): Promise<Set<string> | null> {
-  const status = await git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
-  if (status === null) return null;
-  const dirty = new Set<string>();
+async function dirtyPaths(root: string, base: string): Promise<Set<string> | null> {
+  const [status, committed] = await Promise.all([
+    git(root, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
+    git(root, ["diff", "-z", "--name-only", "--no-renames", base, "HEAD"]),
+  ]);
+  if (status === null || committed === null) return null;
+  const dirty = new Set(committed.split("\0").filter(Boolean));
   const entries = status.split("\0");
   for (let index = 0; index < entries.length; index++) {
     const entry = entries[index]!;
