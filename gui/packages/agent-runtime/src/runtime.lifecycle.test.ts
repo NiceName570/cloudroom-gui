@@ -304,18 +304,18 @@ describe("createAgentRuntime lifecycle", () => {
           {
             name: "PATH",
             source: { plugin: "env-test" },
-            value: "/plugin/bin",
+            value: { masked: true },
             reason: "Use the plugin toolchain",
           },
           {
             name: "AUTH_PROXY_URL",
             source: { plugin: "env-test" },
-            value: "http://127.0.0.1:3334/plugins/env-test/auth",
+            value: { masked: true },
             reason: "Use the authenticated server proxy",
           },
         ]),
       });
-      expect(JSON.stringify(events)).toContain("/plugins/env-test/auth");
+      expect(JSON.stringify(events)).not.toContain("/plugins/env-test/auth");
 
       await runtime.runTurn({
         clientRequestId: "creq_222222224c",
@@ -386,8 +386,8 @@ describe("createAgentRuntime lifecycle", () => {
         expect(record.last("thread/resume")?.params).toMatchObject({
           options: { envVars: { GH_TOKEN: "resumed-git-token" } },
         });
-        expect(JSON.stringify(events)).toContain("first-git-token");
-        expect(JSON.stringify(events)).toContain("resumed-git-token");
+        expect(JSON.stringify(events)).not.toContain("first-git-token");
+        expect(JSON.stringify(events)).not.toContain("resumed-git-token");
         expect(
           events.filter((event) => event.type === "provider.env-resolved"),
         ).toEqual(
@@ -396,12 +396,17 @@ describe("createAgentRuntime lifecycle", () => {
               entries: expect.arrayContaining([
                 expect.objectContaining({
                   name: "GH_TOKEN",
-                  value: "rotated-git-token",
+                  value: { masked: true },
                 }),
               ]),
             }),
           ]),
         );
+        expect(
+          JSON.stringify(
+            events.filter((event) => event.type === "provider.env-resolved"),
+          ),
+        ).not.toContain("rotated-git-token");
       } finally {
         await runtime.shutdown();
       }

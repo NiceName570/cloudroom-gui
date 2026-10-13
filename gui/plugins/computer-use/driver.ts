@@ -1,19 +1,19 @@
 export const DRIVER = {
-  version: "0.30.4",
-  releaseUrl: "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.30.4",
+  version: "0.35.2",
+  releaseUrl: "https://github.com/trycua/cua/releases/download/cua-driver-rs-v0.35.2",
   macTeamId: "YCK386LBJ7",
   assets: {
     darwin: {
-      file: "cua-driver-rs-0.30.4-darwin-universal-binary.tar.gz",
-      sha256: "a93d21bab914b2d854776f46f71a53bddd4e483ef762aeb74137d3ac306cbf65",
+      file: "cua-driver-rs-0.35.2-darwin-universal-binary.tar.gz",
+      sha256: "ec8d9a073ee8c5e81113de682ba17b040eaacd58e84139f851540092c6b8d3b6",
     },
     "linux-x64": {
-      file: "cua-driver-rs-0.30.4-linux-x86_64-binary.tar.gz",
-      sha256: "fff2016e0dea320df9be3aa52fc942c4ea4ca651df32cf3e950119bbc3097d29",
+      file: "cua-driver-rs-0.35.2-linux-x86_64-binary.tar.gz",
+      sha256: "3a47b35ae8e083af8975c62f873a142f4a47c248c630a0eebfdf90de14d6fccf",
     },
     "linux-arm64": {
-      file: "cua-driver-rs-0.30.4-linux-arm64-binary.tar.gz",
-      sha256: "a77007a57ddac6f5b46a49fa9d7c39d9f22b461bd6b50af736b45946b0207875",
+      file: "cua-driver-rs-0.35.2-linux-arm64-binary.tar.gz",
+      sha256: "484d5c5cffa9c32d09244d4dfee078a1c4e8a175e1173f9129ec3bd113e45deb",
     },
   },
 } as const;
@@ -41,8 +41,10 @@ export const PID_REQUIRED_TOOLS = new Set([
   "bring_to_front", "kill_app",
 ]);
 
+// run_script and run_steps can target apps by name inside one call, which would skip the per-app approval.
 export const BLOCKED_TOOLS = new Set([
   "set_config", "install_extension", "install_ffmpeg", "check_for_update", "replay_trajectory",
+  "run_script", "run_steps",
 ]);
 
 export const LIME_CURSOR_SUFFIX = "-8";

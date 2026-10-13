@@ -330,7 +330,8 @@ export function ThreadActionsProvider({
             navigateAwayIfArchived,
           );
           const toastId = `thread-archived-${thread.id}`;
-          appToast.success("Thread Archived", {
+          appToast.success("Archived", {
+            compact: true,
             description: (
               <ArchivedThreadToastDescription
                 archivedThreadCount={response.archivedThreadIds.length}

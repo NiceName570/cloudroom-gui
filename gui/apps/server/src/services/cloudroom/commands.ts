@@ -26,7 +26,7 @@ import { assertValidParentThread, isParentNotifiableChildThread } from "../threa
 import { inferThreadMetadata, queueThreadTitle } from "../threads/thread-metadata-inference.js";
 import { getLastThreadOutput } from "../threads/thread-data.js";
 import { cliPlace, reportAgentConnect } from "./setup-telemetry.js";
-import { cloudSkills, copyLogins, copyMacGithub, importCodexLogin, importPiLogin, setupSync, skillInCloud, stopSync, syncStatus } from "./sync.js";
+import { cloudSkills, copyLogins, copyMacGithub, importCodexLogin, importPiLogin, macPiSetup, setupSync, skillInCloud, stopSync, syncStatus } from "./sync.js";
 import { noteWake, setupPreviews, stopPreviews, previewStatus } from "./previews.js";
 import { CloudSecrets } from "./secrets.js";
 import { cancelMacCodexLogin, hasMacCodexLogin, macCodexLogin, macCodexLoginExpired, macCursorLogin, revokeDesktopToken, startMacCodexLogin, SANDBOX_PREFIX, SandboxAsleep, SandboxDirectory, sandboxThread, type SandboxProject, type SandboxTrigger, type SandboxWakeTrigger } from "./sandboxes.js";
@@ -419,6 +419,17 @@ class CloudroomService {
   /** Background sandbox work never blocks the user, but its failures must reach the log. */
   private warn(message: string, error: unknown, fields: Record<string, unknown> = {}): void {
     this.deps.logger?.warn({ ...fields, error: error instanceof Error ? error.message : String(error) }, message);
+  }
+
+  /** A sandbox's Pi gets this Mac's custom providers and packages, if the user allowed copying logins (ADR 0130).
+   *  Never blocks a start: Pi reports a missing provider itself. */
+  private async copyPiSetup(client: CloudroomClient, sandbox: boolean): Promise<void> {
+    if (!sandbox) return importPiLogin(this.deps);
+    try {
+      if (await copyLogins(this.deps) !== true) return;
+      const setup = await macPiSetup(this.deps);
+      if (setup) await client.piSetup(setup);
+    } catch (error) { this.warn("Pi providers could not be copied to the cloud", error); }
   }
 
   private async sandboxMode(): Promise<boolean> {
@@ -1247,7 +1258,7 @@ class CloudroomService {
       if (startInput.parent_session) throw new ApiError(409, "cloudroom_switch", "Agents started by another agent keep their agent.");
       const workspace = start.workspace.id !== "legacy" ? start.workspace.id : start.workspace.path === capabilities.repository ? undefined : ROOT_WORKSPACE;
       if (target.providerId === "codex" && capabilities.codex_auth_import && !sandboxThread(saved.coreUrl)) await importCodexLogin(this.deps);
-      if (target.providerId === "pi") await importPiLogin(this.deps);
+      if (target.providerId === "pi") await this.copyPiSetup(client, Boolean(sandboxThread(saved.coreUrl)));
       const record = await prepare();
       const startRequestId = randomUUID();
       const started = await client.start(startRequestId, CLOUD_HARNESSES[target.providerId], {
@@ -1799,7 +1810,7 @@ class CloudroomService {
         if (!capabilities.direct_workspaces) throw new ApiError(503, "cloudroom_update", "Update the cloud core to start agents without copying files. Your message is saved.");
         if (options.workspace === ROOT_WORKSPACE && !capabilities.root_workspace) throw new ApiError(503, "cloudroom_update", "Update the cloud core to start agents outside a project. Your message is saved.");
         if (harness === "codex" && capabilities.codex_auth_import && !sandbox) await importCodexLogin(this.deps);
-        if (harness === "pi") await importPiLogin(this.deps);
+        if (harness === "pi") await this.copyPiSetup(client, Boolean(sandbox));
         const fork = cloudForkOf(initial?.input);
         const codeFrom = initial ? z.object({ code_from: z.string().optional() }).parse(JSON.parse(initial.input)).code_from : undefined;
         if (fork && !capabilities.fork) throw new ApiError(503, "cloudroom_update", "Update the cloud core to fork Cloud threads. Your message is saved.");

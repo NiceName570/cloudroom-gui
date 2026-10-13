@@ -63,10 +63,8 @@ function renderThreadTree(
             compareThreads={() => 0}
             selectedThreadId={selectedThreadId}
             collapsedThreadIds={new Set()}
-            collapsedEnvironmentIds={new Set()}
             variant="section"
             onToggleThreadCollapsed={vi.fn()}
-            onToggleEnvironmentCollapsed={vi.fn()}
           />
         </MemoryRouter>
       </TooltipProvider>

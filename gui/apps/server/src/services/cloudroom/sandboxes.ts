@@ -148,7 +148,7 @@ function contentDigest(tar: Buffer): string {
 
 /** OpenCode 1 keeps its logins in auth.json. OpenCode 2 keeps them in its database and exports them as a JSON array,
  *  kept byte for byte so a sandbox's unchanged export matches it (ADR 0172). */
-async function macOpencodeLogin(): Promise<string | null> {
+export async function macOpencodeLogin(): Promise<string | null> {
   const binary = findCliExecutable("opencode");
   const version = (await macHarnessVersions()).opencode;
   const value = binary && version && !version.startsWith("1.")

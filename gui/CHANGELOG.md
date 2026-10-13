@@ -2,6 +2,19 @@
 
 Also on [cloudroom.dev/changelog](https://www.cloudroom.dev/changelog).
 
+## 102
+
+Smoother setup and sign-in (2026-10-13)
+
+### Changes
+
+- Setup now offers your other signed-in agents with one click.
+- Cloud Pi threads bring your Mac's custom providers and packages.
+- Codex shows a one-click Sign in when your Mac's login expires, and the Usage panel shows your cloud Claude usage.
+- Computer use can now pick options in Electron apps.
+- A cleaner sidebar, composer, and thread header, a compact archive toast with Undo, and a phone code box that accepts any paste.
+- Fixes for Teleport to Cloud and Claude on Linux. Security fixes.
+
 ## 101
 
 Phone app with your Mac off (2026-10-12)

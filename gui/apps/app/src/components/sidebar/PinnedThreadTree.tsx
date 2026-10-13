@@ -36,10 +36,8 @@ export interface PinnedThreadTreeProps {
   rootNodes: readonly ProjectThreadNode[];
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
-  collapsedEnvironmentIds: Set<string>;
   onProjectSelect?: () => void;
   onToggleThreadCollapsed: (threadId: string) => void;
-  onToggleEnvironmentCollapsed: (environmentId: string) => void;
   isPinnedReorderPending?: boolean;
   onReorderPinnedRoot?: (
     request: NeighborReorderRequest,
@@ -48,13 +46,11 @@ export interface PinnedThreadTreeProps {
 }
 
 interface SortablePinnedRootItemProps {
-  collapsedEnvironmentIds: Set<string>;
   collapsedThreadIds: Set<string>;
   disabled: boolean;
   displace?: boolean;
   node: ProjectThreadNode;
   onProjectSelect?: () => void;
-  onToggleEnvironmentCollapsed: (environmentId: string) => void;
   onToggleThreadCollapsed: (threadId: string) => void;
   sectionDnd?: SectionThreadDndState | null;
   selectedThreadId?: string;
@@ -75,13 +71,11 @@ function getPinnedRootNodeId(node: ProjectThreadNode): string {
 }
 
 const PinnedRootItem = memo(function PinnedRootItem({
-  collapsedEnvironmentIds,
   collapsedThreadIds,
   consumeClickSuppression,
   dragBindings,
   node,
   onProjectSelect,
-  onToggleEnvironmentCollapsed,
   onToggleThreadCollapsed,
   sectionDnd,
   selectedThreadId,
@@ -93,15 +87,12 @@ const PinnedRootItem = memo(function PinnedRootItem({
       projectId={node.thread.projectId}
       node={node}
       depthOffset={0}
-      isEnvGrouped={false}
       sectionDnd={sectionDnd}
       selectedThreadId={selectedThreadId}
       collapsedThreadIds={collapsedThreadIds}
-      collapsedEnvironmentIds={collapsedEnvironmentIds}
       variant="section"
       onProjectSelect={onProjectSelect}
       onToggleThreadCollapsed={onToggleThreadCollapsed}
-      onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
       consumeClickSuppression={consumeClickSuppression}
       dragBindings={dragBindings}
       sortableRef={sortableRef}
@@ -152,10 +143,8 @@ export const PinnedThreadTree = memo(function PinnedThreadTree({
   rootNodes,
   selectedThreadId,
   collapsedThreadIds,
-  collapsedEnvironmentIds,
   onProjectSelect,
   onToggleThreadCollapsed,
-  onToggleEnvironmentCollapsed,
   isPinnedReorderPending = false,
   onReorderPinnedRoot,
 }: PinnedThreadTreeProps) {
@@ -239,10 +228,8 @@ export const PinnedThreadTree = memo(function PinnedThreadTree({
                 sectionDnd={chronologicalDnd}
                 selectedThreadId={selectedThreadId}
                 collapsedThreadIds={collapsedThreadIds}
-                collapsedEnvironmentIds={collapsedEnvironmentIds}
                 onProjectSelect={onProjectSelect}
                 onToggleThreadCollapsed={onToggleThreadCollapsed}
-                onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
               />
             </Fragment>
           ))}
@@ -276,10 +263,8 @@ export const PinnedThreadTree = memo(function PinnedThreadTree({
                 disabled={standaloneReorderDisabled}
                 selectedThreadId={selectedThreadId}
                 collapsedThreadIds={collapsedThreadIds}
-                collapsedEnvironmentIds={collapsedEnvironmentIds}
                 onProjectSelect={onProjectSelect}
                 onToggleThreadCollapsed={onToggleThreadCollapsed}
-                onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
               />
             ))}
           </SortableContext>
@@ -291,10 +276,8 @@ export const PinnedThreadTree = memo(function PinnedThreadTree({
             node={node}
             selectedThreadId={selectedThreadId}
             collapsedThreadIds={collapsedThreadIds}
-            collapsedEnvironmentIds={collapsedEnvironmentIds}
             onProjectSelect={onProjectSelect}
             onToggleThreadCollapsed={onToggleThreadCollapsed}
-            onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
             consumeClickSuppression={consumeClickSuppression}
           />
         ))

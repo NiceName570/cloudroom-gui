@@ -41,12 +41,17 @@ export interface AppToastOptions extends Pick<
 > {
   action?: Action;
   cancel?: Action;
+  /** One row: dot, title, muted description, actions. No close button. */
+  compact?: boolean;
   description?: ReactNode;
+  /** Runs only when the user clicks X, unlike Sonner's onDismiss, which also fires on programmatic dismissals. */
+  onClose?: () => void;
 }
 
 interface AppToastContentProps {
   action?: Action;
   cancel?: Action;
+  compact?: boolean;
   description?: ReactNode;
   dismissible?: boolean;
   id?: number | string;
@@ -72,6 +77,7 @@ interface ShowAppToastParams {
 
 interface AppToastActionButtonProps {
   action: Action;
+  className?: string;
   id?: number | string;
   priority: "primary" | "secondary";
 }
@@ -107,6 +113,7 @@ function dismissToast(id: number | string | undefined): void {
 
 function AppToastActionButton({
   action,
+  className,
   id,
   priority,
 }: AppToastActionButtonProps) {
@@ -123,7 +130,7 @@ function AppToastActionButton({
       type="button"
       variant="ghost"
       size="sm"
-      className="h-6 shrink-0 px-2 text-xs font-medium"
+      className={cn("h-6 shrink-0 px-2 text-xs font-medium", className)}
       onClick={handleClick}
     >
       {action.label}
@@ -188,6 +195,7 @@ function AppToastOverflowText({
 export function AppToastContent({
   action,
   cancel,
+  compact = false,
   description,
   dismissible = true,
   id,
@@ -201,16 +209,55 @@ export function AppToastContent({
     dismissToast(id);
     openNotificationCenter(notificationId);
   };
+  const actionClassName = compact
+    ? "h-7 px-2.5 text-[13px] text-primary-text hover:text-primary-text"
+    : undefined;
   const actions = hasActions ? (
     <>
       {action ? (
-        <AppToastActionButton action={action} id={id} priority="primary" />
+        <AppToastActionButton
+          action={action}
+          className={actionClassName}
+          id={id}
+          priority="primary"
+        />
       ) : null}
       {cancel ? (
-        <AppToastActionButton action={cancel} id={id} priority="secondary" />
+        <AppToastActionButton
+          action={cancel}
+          className={actionClassName}
+          id={id}
+          priority="secondary"
+        />
       ) : null}
     </>
   ) : null;
+
+  if (compact) {
+    return (
+      <div className="flex h-10 w-[var(--width,320px)] max-w-[calc(100vw-32px)] shrink-0 items-center gap-2.5 rounded-lg border border-foreground/10 bg-popover pl-3.5 pr-1.5 text-[13px] text-popover-foreground shadow-md max-[600px]:w-[calc(100vw-32px)]">
+        <span
+          className="size-1.5 shrink-0 rounded-full bg-primary"
+          aria-hidden
+        />
+        <span className="shrink-0 font-medium" data-testid="app-toast-title">
+          {title}
+        </span>
+        <span
+          className="min-w-0 flex-1 truncate text-muted-foreground"
+          data-testid="app-toast-description"
+        >
+          {description}
+        </span>
+        {hasActions ? (
+          <>
+            <span className="h-4 w-px shrink-0 bg-foreground/15" aria-hidden />
+            <div className="flex shrink-0 items-center">{actions}</div>
+          </>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="w-[var(--width,320px)] max-w-[calc(100vw-32px)] shrink-0 rounded-lg border border-border bg-popover py-2.5 pl-3 pr-2 text-popover-foreground shadow-md max-[600px]:w-[calc(100vw-32px)]">
@@ -276,9 +323,11 @@ function showAppToast({
     action,
     cancel,
     className,
+    compact,
     description,
     dismissible = true,
     duration,
+    onClose,
     ...sonnerOptions
   } = options ?? {};
   const nextDuration =
@@ -299,10 +348,19 @@ function showAppToast({
       <AppToastContent
         action={action}
         cancel={cancel}
+        compact={compact}
         description={description}
         dismissible={dismissible}
         id={id}
         notificationId={notificationId}
+        onDismiss={
+          onClose
+            ? () => {
+                onClose();
+                dismissToast(id);
+              }
+            : undefined
+        }
         title={title}
         tone={tone}
       />

@@ -268,7 +268,44 @@ function UsageNote({ children }: { children: string }) {
   );
 }
 
-function ProviderUsageBody({ provider }: { provider: UsageProvider }) {
+async function signInMacCodex(): Promise<void> {
+  const call = async (method: "GET" | "POST") => {
+    const response = await fetch("/api/v1/cloudroom/mac/codex-login", method === "POST" ? { method, headers: { "content-type": "application/json" }, body: "{}" } : {});
+    if (!response.ok) throw new Error("Codex sign-in could not start.");
+    return (await response.json()) as { state: string; message?: string };
+  };
+  let status = await call("POST");
+  while (status.state === "waiting") {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    status = await call("GET");
+  }
+  if (status.state === "error") throw new Error(status.message ?? "Codex sign-in failed.");
+}
+
+function CodexSignIn({ onSignedIn }: { onSignedIn: () => void }) {
+  const [state, setState] = useState<"idle" | "waiting" | "error">("idle");
+  const [error, setError] = useState("");
+  const signIn = () => {
+    setState("waiting");
+    signInMacCodex().then(
+      () => { setState("idle"); onSignedIn(); },
+      (cause: unknown) => { setState("error"); setError(cause instanceof Error ? cause.message : String(cause)); },
+    );
+  };
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <UsageNote>{state === "waiting" ? "finish in your browser" : "session expired"}</UsageNote>
+        <Button type="button" size="sm" className="h-6 px-2.5 text-xs" disabled={state === "waiting"} onClick={signIn}>
+          {state === "waiting" ? "Waiting…" : "Sign in"}
+        </Button>
+      </div>
+      {state === "error" ? <p role="alert" className="text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
+function ProviderUsageBody({ provider, onCodexSignedIn }: { provider: UsageProvider; onCodexSignedIn?: () => void }) {
   const usage = provider.usage;
   if (usage === null) return <UsageNote>Usage not reported.</UsageNote>;
   switch (usage.status) {
@@ -291,7 +328,11 @@ function ProviderUsageBody({ provider }: { provider: UsageProvider }) {
     case "unauthenticated":
       return <UsageNote>{provider.signInHint}</UsageNote>;
     case "expired":
-      return <UsageNote>{provider.expiredHint}</UsageNote>;
+      return provider.providerId === "codex" && onCodexSignedIn ? (
+        <CodexSignIn onSignedIn={onCodexSignedIn} />
+      ) : (
+        <UsageNote>{provider.expiredHint}</UsageNote>
+      );
     case "error":
       return <UsageNote>{usage.message}</UsageNote>;
   }
@@ -675,7 +716,21 @@ export function ProviderUsageStatusContent({
                         snapshot.error !== null) ? (
                       <UsageNote>{usageFeedbackMessages.unavailable}</UsageNote>
                     ) : (
-                      <ProviderUsageBody provider={account} />
+                      <ProviderUsageBody
+                        provider={account}
+                        onCodexSignedIn={
+                          activeMachine?.id.startsWith("source:") ||
+                          (account.accountId && account.accountId !== "local")
+                            ? undefined
+                            : () =>
+                                void refreshUsage({
+                                  force: true,
+                                  machineIds:
+                                    activeMachineId === null ? null : [activeMachineId],
+                                  maxAgeMs: 0,
+                                })
+                        }
+                      />
                     )}
                   </div>
                 ))}

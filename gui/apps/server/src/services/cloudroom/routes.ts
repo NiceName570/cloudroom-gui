@@ -14,12 +14,13 @@ import { binding, teleportBlocked, teleportProgress } from "./store.js";
 import { browserRequestProblem } from "../../browser-request-guard.js";
 import { cancelClaudeToken, claudePlan, ensureClaudeCli, isClaudeApiKey, startClaudeToken, withClaudeTokenRun } from "./claude-token.js";
 import { startClaudeVersionSync } from "./harness-versions.js";
+import { macSignedInAgents } from "./mac-agents.js";
 import { autoDeleteDaysSchema, readAutoDelete, saveAutoDelete, startAutoDeleteSync } from "./auto-delete.js";
 import { importBbThreads } from "./bb-import.js";
 import { importNativeSessions, listNativeSessions } from "./session-import.js";
 import { exportableChats, exportChats } from "./chat-export.js";
 import { copyToMac, openOnMac, teleportingToLocal, teleportToLocal } from "./teleport-local.js";
-import { cloudEnvironmentRequestSchema, macMcpServers, macSkills, macVariables, sandboxThread, type CloudEnvironmentRequest } from "./sandboxes.js";
+import { cloudEnvironmentRequestSchema, macCodexLogin, macMcpServers, macSkills, macVariables, sandboxThread, startMacCodexLogin, type CloudEnvironmentRequest } from "./sandboxes.js";
 import { CloudroomError } from "./client.js";
 import { finishMcpSignIn, isRemoteMcp, startMcpSignIn } from "./mcp-login.js";
 import { archiveThreadAndChildren } from "../threads/thread-archive.js";
@@ -31,7 +32,7 @@ import { getGateAuthKind } from "../../request-context.js";
 import { noteActiveMinute, timeInApp } from "./time-in-app.js";
 import { disconnectGithub, githubAccount, githubAuth } from "./github-login.js";
 import { addGithubRepo, repoSuggestions } from "./repo-suggestions.js";
-import { SETUP_ACTIONS, SETUP_DETAILS, SETUP_STEPS } from "../system/telemetry.js";
+import { SETUP_ACTIONS, SETUP_AGENTS, SETUP_DETAILS, SETUP_STEPS } from "../system/telemetry.js";
 
 const SAFE_SETTINGS_SEARCH = /^(?=.{2,40}$)\p{L}+(?: \p{L}+){0,3}$/u;
 
@@ -149,10 +150,11 @@ export function installCloudroomRoutes(app: Hono, deps: AppDeps): void {
     return context.json({ ok: true }, 202);
   });
   app.post("/api/v1/cloudroom/setup-step", async (context) => {
-    const parsed = z.object({ step: z.enum(SETUP_STEPS), action: z.enum(SETUP_ACTIONS), detail: z.enum(SETUP_DETAILS).nullable().default(null) }).strict().safeParse(await context.req.json().catch(() => null));
+    const parsed = z.object({ step: z.enum(SETUP_STEPS), action: z.enum(SETUP_ACTIONS), detail: z.enum(SETUP_DETAILS).nullable().default(null), agents: z.array(z.enum(SETUP_AGENTS)).max(SETUP_AGENTS.length).optional() }).strict().safeParse(await context.req.json().catch(() => null));
     if (!parsed.success) throw new ApiError(400, "invalid_setup_step", "Invalid setup step.");
-    const choices = parsed.data.step === "agent" && parsed.data.action === "done" ? { copy_logins: await copyLogins(deps), mac_access: await macAccess(deps) } : {};
-    deps.telemetry.capture({ name: "setup_step", properties: { ...parsed.data, ...choices, seconds_since_first_launch: secondsSinceFirstLaunch() } });
+    const { agents, ...step } = parsed.data;
+    const choices = step.step === "agent" && step.action === "done" ? { copy_logins: await copyLogins(deps), mac_access: await macAccess(deps) } : {};
+    deps.telemetry.capture({ name: "setup_step", properties: { ...step, ...(agents ? { agents: agents.join(",") } : {}), ...choices, seconds_since_first_launch: secondsSinceFirstLaunch() } });
     return context.json({ ok: true });
   });
   app.post("/api/v1/cloudroom/settings-search-miss", async (context) => {
@@ -354,6 +356,11 @@ export function installCloudroomRoutes(app: Hono, deps: AppDeps): void {
       return context.json(await cloudroom(deps).codexAuth(action, input.requestId));
     });
   }
+  const macCodexStatus = (run: ReturnType<typeof macCodexLogin>) =>
+    !run ? { state: "idle" as const } : !run.done ? { state: "waiting" as const } : run.error ? { state: "error" as const, message: run.error } : { state: "done" as const };
+  app.post("/api/v1/cloudroom/mac/codex-login", context => context.json(macCodexStatus(startMacCodexLogin())));
+  app.get("/api/v1/cloudroom/mac/codex-login", context => context.json(macCodexStatus(macCodexLogin())));
+  app.get("/api/v1/cloudroom/mac/agents", async context => context.json({ agents: await macSignedInAgents() }));
   app.get("/api/v1/cloudroom/account/github", async context => context.json(await githubAuth(deps)));
   app.get("/api/v1/cloudroom/account/github/account", async context => context.json(await githubAccount(deps)));
   app.post("/api/v1/cloudroom/account/github/disconnect", async context => { await disconnectGithub(deps); return context.json({ ok: true }); });

@@ -5,8 +5,9 @@ import { Miniflare, Response as MiniflareResponse } from "miniflare";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { decodeFrame, encodeFrame, type Frame } from "@cloudroom/tunnel-contract";
 import { OFFLINE_HEADER } from "./pages";
-import { GATE_AUTH_HEADER, PHONE_SESSION_HEADER, SESSION_COOKIE, TUNNEL_TARGET_HEADER } from "./protocol-headers";
-import { parseVisitorHost, safeReturnPath } from "./worker";
+import { GATE_AUTH_HEADER, PHONE_SESSION_HEADER, SESSION_COOKIE, TUNNEL_SESSION_HEADER, TUNNEL_TARGET_HEADER } from "./protocol-headers";
+import { parseVisitorHost, requestForTunnelDo, safeReturnPath } from "./worker";
+import { sha256Hex } from "./store";
 
 type ClientWebSocket = NonNullable<
   Awaited<ReturnType<Miniflare["dispatchFetch"]>>["webSocket"]
@@ -39,11 +40,11 @@ function fetchRelay(url: string, init: RequestInit = {}) {
   return mf.dispatchFetch(url, { redirect: "manual", ...init } as never);
 }
 
-async function register() {
+async function register(installId = INSTALL_ID) {
   const response = await fetchRelay(`https://${BASE}/api/register`, {
     method: "POST",
     headers: { authorization: DESKTOP_AUTH, "content-type": "application/json" },
-    body: JSON.stringify({ installId: INSTALL_ID }),
+    body: JSON.stringify({ installId }),
   });
   if (response.status !== 200) throw new Error(`register ${response.status}: ${await response.text()}`);
   return (await response.json()) as { handle: string; credential: string; serverUrl: string };
@@ -60,13 +61,23 @@ function serveMac(ws: ClientWebSocket): void {
   ws.addEventListener("message", (event) => {
     if (typeof event.data === "string") return;
     const frame = decodeFrame(event.data as ArrayBuffer);
-    if (frame.type !== "open-http") return;
-    seen.push({
-      path: frame.path,
-      headers: Object.fromEntries(frame.headers.map(([k, v]) => [k.toLowerCase(), v])),
-      ...(frame.target ? { target: frame.target } : {}),
-    });
     const send = (out: Frame) => ws.send(new Uint8Array(encodeFrame(out)));
+    if (frame.type === "open-http" || frame.type === "open-ws") {
+      seen.push({
+        path: frame.path,
+        headers: Object.fromEntries(frame.headers.map(([k, v]) => [k.toLowerCase(), v])),
+        ...(frame.target ? { target: frame.target } : {}),
+      });
+    }
+    if (frame.type === "open-ws") {
+      send({ type: "ws-open-ack", streamId: frame.streamId, protocol: null });
+      return;
+    }
+    if (frame.type === "ws-data") {
+      send(frame);
+      return;
+    }
+    if (frame.type !== "open-http") return;
     send({
       type: "resp-head",
       streamId: frame.streamId,
@@ -82,10 +93,10 @@ function serveMac(ws: ClientWebSocket): void {
   });
 }
 
-async function phoneCode(): Promise<string> {
+async function phoneCode(machineCredential = credential): Promise<string> {
   const response = await fetchRelay(`https://${BASE}/api/phone-code`, {
     method: "POST",
-    headers: { authorization: `Bearer ${credential}` },
+    headers: { authorization: `Bearer ${machineCredential}` },
   });
   expect(response.status).toBe(200);
   const body = (await response.json()) as { code: string; url: string };
@@ -100,12 +111,12 @@ function cookieFrom(response: { headers: { get(name: string): string | null } })
   return setCookie.split(";")[0];
 }
 
-async function signInPhone(): Promise<string> {
-  const code = await phoneCode();
+async function signInPhone(server = { handle, credential }): Promise<string> {
+  const code = await phoneCode(server.credential);
   const apex = await fetchRelay(`https://${BASE}/pair?code=${code}`);
   expect(apex.status).toBe(302);
   const next = apex.headers.get("location")!;
-  expect(new URL(next).host).toBe(`${handle}.${BASE}`);
+  expect(new URL(next).host).toBe(`${server.handle}.${BASE}`);
   const paired = await fetchRelay(next);
   expect(paired.status).toBe(302);
   expect(paired.headers.get("location")).toBe("/");
@@ -225,14 +236,91 @@ describe("Cloudroom Connect relay", () => {
   });
 
   it("signs every phone out when the Mac asks", async () => {
+    const otherMac = await register("fedcba9876543210fedcba9876543210");
+    const otherTunnelResponse = await fetchRelay(`${otherMac.serverUrl}/__tunnel?v=1`, {
+      headers: { upgrade: "websocket", authorization: `Bearer ${otherMac.credential}` },
+    });
+    expect(otherTunnelResponse.status).toBe(101);
+    const otherTunnel = otherTunnelResponse.webSocket!;
+    serveMac(otherTunnel);
+    const otherCookie = await signInPhone(otherMac);
     const cookie = await signInPhone();
+    const secondCookie = await signInPhone();
+    const share = await fetchRelay(`https://${handle}.${BASE}/__share?port=3000`, {
+      headers: { cookie },
+    });
+    const shareCookie = cookieFrom(await fetchRelay(share.headers.get("location")!));
+    const addresses = [
+      { url: `https://${handle}.${BASE}/ws`, cookie },
+      { url: `https://${handle}.${BASE}/ws/terminals/test`, cookie: secondCookie },
+      { url: `https://${handle}--3000.${BASE}/ws`, cookie: shareCookie },
+    ];
+    const sockets = await Promise.all(addresses.map(async (address) => {
+      const response = await fetchRelay(address.url, {
+        headers: { upgrade: "websocket", cookie: address.cookie },
+      });
+      expect(response.status).toBe(101);
+      const socket = response.webSocket!;
+      socket.accept();
+      const echoed = new Promise<unknown>((resolve) => {
+        socket.addEventListener("message", (event) => resolve(event.data), { once: true });
+      });
+      socket.send("before sign-out");
+      expect(await echoed).toBe("before sign-out");
+      return socket;
+    }));
+    expect(seen.every((entry) => entry.headers[TUNNEL_SESSION_HEADER] === undefined)).toBe(true);
+    const delayedUpgrade = requestForTunnelDo(new Request(addresses[0]!.url, {
+      headers: { upgrade: "websocket", cookie },
+    }), null);
+    const namespace = await mf.getDurableObjectNamespace("TUNNEL_DO");
+    const stub = namespace.get(namespace.idFromName(handle));
+    const closed = sockets.map((socket) => new Promise<void>((resolve) => {
+      socket.addEventListener("close", () => {
+        socket.close();
+        resolve();
+      }, { once: true });
+    }));
     const revoke = await fetchRelay(`https://${BASE}/api/phone-sessions/revoke`, {
       method: "POST",
       headers: { authorization: `Bearer ${credential}` },
     });
+    expect(revoke.status).toBe(200);
     expect(((await revoke.json()) as { revoked: number }).revoked).toBeGreaterThan(0);
+    await Promise.race([
+      Promise.all(closed),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Signed-out sockets stayed open")), 1000)),
+    ]);
+    const delayedReconnect = await stub.fetch(delayedUpgrade.url, {
+      headers: Object.fromEntries(delayedUpgrade.headers),
+    });
+    expect(delayedReconnect.status).toBe(401);
+    for (const address of addresses) {
+      const reconnect = await fetchRelay(address.url, {
+        headers: { upgrade: "websocket", cookie: address.cookie },
+      });
+      expect(reconnect.status).toBe(401);
+    }
     const after = await fetchRelay(`https://${handle}.${BASE}/x`, { headers: { cookie } });
     expect(after.status).toBe(401);
+    const otherStillSignedIn = await fetchRelay(`${otherMac.serverUrl}/x`, {
+      headers: { cookie: otherCookie },
+    });
+    expect(otherStillSignedIn.status).toBe(200);
+    otherTunnel.close();
+
+    const newCookie = await signInPhone();
+    const working = await fetchRelay(`https://${handle}.${BASE}/x`, { headers: { cookie: newCookie } });
+    expect(await working.text()).toBe("mac:app:/x");
+    const db = await mf.getD1Database("DB");
+    await db.prepare("DELETE FROM session WHERE token_hash = ?")
+      .bind(await sha256Hex(newCookie.split("=")[1]!)).run();
+    const expired = await fetchRelay(`https://${handle}.${BASE}/x`, { headers: { cookie: newCookie } });
+    expect(expired.status).toBe(401);
+    const expiredSocket = await fetchRelay(`https://${handle}.${BASE}/ws`, {
+      headers: { upgrade: "websocket", cookie: newCookie },
+    });
+    expect(expiredSocket.status).toBe(401);
   });
 
   it("passes a signed-in phone's cloud requests to the website with its session", async () => {

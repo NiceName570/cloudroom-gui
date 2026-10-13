@@ -42,7 +42,7 @@ export function codePage(action: string, error?: string, status = error ? 400 : 
     `<h1>Open Cloudroom on your phone</h1>
      <p>Enter the code from the Cloudroom desktop app: Settings → Cloudroom Connect.</p>
      ${error ? `<p class="error">${escapeHtml(error)}</p>` : ""}
-     <form method="get" action="${escapeHtml(action)}"><input name="code" aria-label="Code" placeholder="ABCD-EFGH" maxlength="9" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required><button type="submit">Open Cloudroom</button></form>`,
+     <form method="get" action="${escapeHtml(action)}"><input name="code" aria-label="Code" placeholder="ABCD-EFGH" oninput="var c=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'');if(c!==this.value)this.value=c" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" required><button type="submit">Open Cloudroom</button></form>`,
     status,
   );
 }

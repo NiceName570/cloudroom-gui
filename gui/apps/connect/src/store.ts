@@ -1,7 +1,6 @@
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
 const HANDLE_ALPHABET = "abcdefghjkmnpqrstvwxyz23456789";
 const SERVER_CACHE_MS = 15_000;
-const SESSION_CACHE_MS = 20_000;
 const SEEN_WRITE_INTERVAL_MS = 60_000;
 export const PHONE_CODE_TTL_MS = 10 * 60_000;
 export const SHARE_CODE_TTL_MS = 60_000;
@@ -26,7 +25,6 @@ interface Cached<T> {
 }
 
 const servers = new Map<string, Cached<Server | null>>();
-const sessions = new Map<string, Cached<Session | null>>();
 const seenWrites = new Map<string, number>();
 
 function cached<T>(
@@ -237,19 +235,17 @@ export async function createSession(
   return token;
 }
 
-export function sessionByToken(
+export async function sessionByToken(
   db: D1Database,
   token: string,
 ): Promise<Session | null> {
-  return cached(sessions, token, SESSION_CACHE_MS, async () => {
-    const row = await db
-      .prepare(
-        "SELECT server_id, target FROM session WHERE token_hash = ? AND expires_at > ?",
-      )
-      .bind(await sha256Hex(token), Date.now())
-      .first<{ server_id: string; target: string | null }>();
-    return row ? { serverId: row.server_id, target: row.target } : null;
-  });
+  const row = await db
+    .prepare(
+      "SELECT server_id, target FROM session WHERE token_hash = ? AND expires_at > ?",
+    )
+    .bind(await sha256Hex(token), Date.now())
+    .first<{ server_id: string; target: string | null }>();
+  return row ? { serverId: row.server_id, target: row.target } : null;
 }
 
 export async function phoneUser(db: D1Database, token: string): Promise<string | null> {
@@ -266,7 +262,6 @@ export async function revokeSessions(
   db: D1Database,
   serverId: string,
 ): Promise<number> {
-  sessions.clear();
   const result = await db
     .prepare("DELETE FROM session WHERE server_id = ?")
     .bind(serverId)

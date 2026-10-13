@@ -110,11 +110,6 @@ interface ArchiveThreadAndChildrenTransactionArgs {
   threadId: string;
 }
 
-interface ArchiveEnvironmentThreadsTransactionArgs {
-  environmentId: string;
-  queryClient: QueryClient;
-}
-
 interface ArchiveMatchingThreadsTransactionArgs {
   matchesThread: (thread: ThreadListEntry) => boolean;
   queryClient: QueryClient;
@@ -256,7 +251,9 @@ export async function applyThreadUpdateResult({
   queryClient,
   thread,
   executionOptionsChanged = false,
-}: ThreadRuntimeCacheArgs & { executionOptionsChanged?: boolean }): Promise<void> {
+}: ThreadRuntimeCacheArgs & {
+  executionOptionsChanged?: boolean;
+}): Promise<void> {
   queryClient.setQueryData<ThreadWithRuntime>(
     threadQueryKey(thread.id),
     thread,
@@ -267,7 +264,9 @@ export async function applyThreadUpdateResult({
       queryClient.invalidateQueries({
         queryKey: threadDefaultExecutionOptionsQueryKey(thread.id),
       }),
-      queryClient.invalidateQueries({ queryKey: ["cloudroom-thread", thread.id] }),
+      queryClient.invalidateQueries({
+        queryKey: ["cloudroom-thread", thread.id],
+      }),
     ]);
   }
 }
@@ -667,17 +666,6 @@ export async function beginArchiveThreadAndChildrenTransaction({
   return beginArchiveMatchingThreadsTransaction({
     matchesThread: (thread) =>
       thread.id === threadId || thread.parentThreadId === threadId,
-    queryClient,
-  });
-}
-
-export async function beginArchiveEnvironmentThreadsTransaction({
-  environmentId,
-  queryClient,
-}: ArchiveEnvironmentThreadsTransactionArgs): Promise<ArchiveThreadsTransaction> {
-  await queryClient.cancelQueries({ queryKey: threadsQueryKey() });
-  return beginArchiveMatchingThreadsTransaction({
-    matchesThread: (thread) => thread.environmentId === environmentId,
     queryClient,
   });
 }

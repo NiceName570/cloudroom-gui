@@ -37,8 +37,6 @@ export function getSidebarItemKey(item: ProjectThreadItem): string {
   switch (item.kind) {
     case "thread":
       return `thread:${item.node.thread.id}`;
-    case "environment":
-      return `env:${item.group.environmentId}`;
     case "section":
       return `section:${item.group.key}`;
   }
@@ -57,12 +55,6 @@ function findThreadNode(
       if (item.node.thread.id === threadId) return item.node;
       const nested = findThreadNode(item.node.children, threadId);
       if (nested) return nested;
-    } else if (item.kind === "environment") {
-      for (const node of item.group.nodes) {
-        if (node.thread.id === threadId) return node;
-        const nested = findThreadNode(node.children, threadId);
-        if (nested) return nested;
-      }
     } else {
       const nested = findThreadNode(item.group.items, threadId);
       if (nested) return nested;
@@ -72,11 +64,7 @@ function findThreadNode(
 }
 
 function itemHoldsThread(item: ProjectThreadItem, threadId: string): boolean {
-  if (item.kind === "thread") return item.node.thread.id === threadId;
-  if (item.kind === "environment") {
-    return item.group.nodes.some((node) => node.thread.id === threadId);
-  }
-  return false;
+  return item.kind === "thread" && item.node.thread.id === threadId;
 }
 
 function beforeKeyAfterThread(

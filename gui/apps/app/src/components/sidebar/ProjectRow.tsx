@@ -2,12 +2,6 @@ import {
   SidebarHeaderControls,
   SidebarSectionMenuItems,
 } from "./SidebarHeaderControls";
-import { SidebarRowControls, SidebarControlButton } from "./SidebarRowControls";
-import {
-  SIDEBAR_CONTROL_BUTTON_CLASS,
-  SIDEBAR_CONTROL_PAIR_SIZE_CLASS,
-  SIDEBAR_GROUP_TEXT_CLASS,
-} from "./sidebarRowClasses";
 import {
   Fragment,
   memo,
@@ -30,58 +24,26 @@ import { createPortal } from "react-dom";
 import { PERSONAL_PROJECT_ID, type ThreadListEntry } from "@cloudroom/domain";
 import type { ProjectResponse } from "@cloudroom/server-contract";
 import { NavLink } from "react-router-dom";
-import { useCreateThreadInEnvironment } from "@/hooks/useCreateThreadInEnvironment";
-import { useSystemEnvironmentProviders } from "@/hooks/queries/environment-provider-queries";
-import {
-  findEnvironmentDisplayProvider,
-  getEnvironmentLabelIconName,
-  UNNAMED_ENVIRONMENT_LABEL,
-} from "@/lib/environment-workspace-display";
-import { resolveEnvironmentDisplayName } from "@cloudroom/core-ui";
 import {
   usePromptDraftHasInput,
   usePromptDraftInputThreadIds,
 } from "@/hooks/usePromptDraftStorage";
-import {
-  useArchiveEnvironmentThreads,
-  useUpdateEnvironment,
-} from "@/hooks/mutations/environment-mutations";
-import { useDialogState } from "@/hooks/useDialogState";
-import { Button } from "@cloudroom/shared-ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@cloudroom/shared-ui/dropdown-menu";
 import { EmptyState } from "@cloudroom/shared-ui/empty-state";
 import { Icon, type IconName } from "@cloudroom/shared-ui/icon";
 import {
   SidebarMenuSkeleton,
   SidebarStickyGroup,
-  SidebarStickyTier,
 } from "@/components/ui/sidebar.js";
 import {
   ProjectActionsContextMenu,
   ProjectActionsMenuItems,
 } from "@/components/project/ProjectActionsMenu";
 import {
-  EnvironmentRenameDialog,
-  type EnvironmentRenameDialogTarget,
-} from "@/components/dialogs/EnvironmentRenameDialog";
-import {
   COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
-  COARSE_POINTER_GLYPH_BOX_CLASS,
   COARSE_POINTER_ICON_SIZE_CLASS,
   COARSE_POINTER_ROW_ACTION_SIZE_CLASS,
   COARSE_POINTER_ROW_HEIGHT_CLASS,
 } from "@cloudroom/shared-ui/coarse-pointer-sizing";
-import {
-  SIDEBAR_HOVER_ACTIONS_CLASS,
-  SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
-  SIDEBAR_HOVER_ACTIONS_MOBILE_ALWAYS_VALUE,
-  SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
-} from "@/components/ui/sidebar-hover-actions.js";
 import {
   getCollapsedChildActivity,
   isBusyThread,
@@ -90,16 +52,9 @@ import {
   type CollapsedChildActivity,
 } from "@cloudroom/client-core";
 import { cn } from "@cloudroom/shared-ui/lib/utils";
-import { getMutationErrorMessage } from "@/lib/mutation-errors";
 import { getSettingsProjectRoutePath } from "@/lib/route-paths";
 import { getThreadDisplayTitle } from "@/lib/thread-title";
-import { appToast } from "@/components/ui/app-toast";
-import { useRouteNavigate } from "@/components/ui/app-route-anchor";
-import {
-  CollapsedThreadStatusGlyph,
-  ThreadRow,
-  type ThreadRowOptions,
-} from "./ThreadRow";
+import { ThreadRow, type ThreadRowOptions } from "./ThreadRow";
 import {
   buildSidebarEntitySectionId,
   buildSectionThreadList,
@@ -111,7 +66,6 @@ import {
   getSidebarDndItemId,
   isSidebarProjectThread,
   projectThreadItemContainsThread,
-  type EnvironmentThreadGroup,
   type ProjectThreadItem,
   type ProjectThreadItemRowCountContext,
   type ProjectThreadNode,
@@ -141,7 +95,6 @@ import {
 import type { ConsumeDragClickSuppression } from "@/components/ui/use-drag-click-suppression";
 import type { NeighborReorderRequest } from "@cloudroom/client-core";
 import type { SidebarSectionComparator } from "./sidebarSectionSort";
-import { SidebarChildToggleChevron } from "./SidebarChildToggleChevron";
 import { SidebarSectionOrderList } from "./SidebarSectionOrderList";
 import {
   PINNED_THREAD_PARENT_KEY,
@@ -194,13 +147,11 @@ export interface ProjectRowProps {
   isCollapsed: boolean;
   compareThreads: ThreadComparator;
   collapsedThreadIds: Set<string>;
-  collapsedEnvironmentIds: Set<string>;
   isLocalPathInvalid: boolean;
   onProjectSelect?: () => void;
   onCreateProjectThread?: (projectId: string) => void;
   onToggleProjectCollapsed: (projectId: string) => void;
   onToggleThreadCollapsed: (threadId: string) => void;
-  onToggleEnvironmentCollapsed: (environmentId: string) => void;
   consumeProjectClickSuppression?: ConsumeDragClickSuppression;
   projectDragBindings?: SidebarSortableDragBindings;
   projectRowRef?: (element: HTMLDivElement | null) => void;
@@ -216,11 +167,9 @@ interface ProjectThreadTreeProps {
   compareThreads: ThreadComparator;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
-  collapsedEnvironmentIds: Set<string>;
   variant: ProjectThreadTreeVariant;
   onProjectSelect?: () => void;
   onToggleThreadCollapsed: (threadId: string) => void;
-  onToggleEnvironmentCollapsed: (environmentId: string) => void;
 }
 
 interface SectionThreadTreeProps {
@@ -229,13 +178,11 @@ interface SectionThreadTreeProps {
   sections?: readonly SidebarSectionDefinition[];
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
-  collapsedEnvironmentIds: Set<string>;
   onProjectSelect?: () => void;
   onCreateThreadInSection?: (sectionId: string) => void;
   onRenameSection?: (section: SidebarSectionDefinition) => void;
   onRemoveSection?: (section: SidebarSectionDefinition) => void;
   onToggleThreadCollapsed: (threadId: string) => void;
-  onToggleEnvironmentCollapsed: (environmentId: string) => void;
 }
 
 interface ChronologicalBuiltInSidebarSections {
@@ -279,14 +226,11 @@ interface ThreadTreeNodeRowProps {
   projectId: string;
   node: ProjectThreadNode;
   depthOffset: number;
-  isEnvGrouped: boolean;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
-  collapsedEnvironmentIds: Set<string>;
   variant: ProjectThreadTreeVariant;
   onProjectSelect?: () => void;
   onToggleThreadCollapsed: (threadId: string) => void;
-  onToggleEnvironmentCollapsed: (environmentId: string) => void;
   consumeClickSuppression?: ConsumeDragClickSuppression;
   dragBindings?: SidebarSortableDragBindings;
   sectionDnd?: SectionThreadDndState | null;
@@ -300,14 +244,12 @@ interface ThreadTreeItemRowProps {
   depthOffset: number;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
-  collapsedEnvironmentIds: Set<string>;
   variant: ProjectThreadTreeVariant;
   onProjectSelect?: () => void;
   onCreateThreadInSection?: (sectionId: string) => void;
   onRenameSection?: (section: SidebarSectionDefinition) => void;
   onRemoveSection?: (section: SidebarSectionDefinition) => void;
   onToggleThreadCollapsed: (threadId: string) => void;
-  onToggleEnvironmentCollapsed: (environmentId: string) => void;
   consumeClickSuppression?: ConsumeDragClickSuppression;
   dragBindings?: SidebarSortableDragBindings;
   isDropTargetActive?: boolean;
@@ -321,14 +263,12 @@ interface SectionTreeItemRowProps {
   depthOffset: number;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
-  collapsedEnvironmentIds: Set<string>;
   variant: ProjectThreadTreeVariant;
   onProjectSelect?: () => void;
   onCreateThreadInSection?: (sectionId: string) => void;
   onRenameSection?: (section: SidebarSectionDefinition) => void;
   onRemoveSection?: (section: SidebarSectionDefinition) => void;
   onToggleThreadCollapsed: (threadId: string) => void;
-  onToggleEnvironmentCollapsed: (environmentId: string) => void;
   consumeClickSuppression?: ConsumeDragClickSuppression;
   dragBindings?: SidebarSortableDragBindings;
   isDropTargetActive?: boolean;
@@ -341,8 +281,6 @@ function getItemProjectId(item: ProjectThreadItem): string {
   switch (item.kind) {
     case "thread":
       return item.node.thread.projectId;
-    case "environment":
-      return item.group.nodes[0].thread.projectId;
     case "section":
       if (item.group.items.length === 0) {
         return PERSONAL_PROJECT_ID;
@@ -351,106 +289,13 @@ function getItemProjectId(item: ProjectThreadItem): string {
   }
 }
 
-interface EnvironmentThreadGroupRowProps {
-  projectId: string;
-  environmentThreadGroup: EnvironmentThreadGroup;
-  depthOffset: number;
-  selectedThreadId?: string;
-  isCollapsed: boolean;
-  collapsedThreadIds: Set<string>;
-  collapsedEnvironmentIds: Set<string>;
-  variant: ProjectThreadTreeVariant;
-  onProjectSelect?: () => void;
-  onToggleThreadCollapsed: (threadId: string) => void;
-  onToggleEnvironmentCollapsed: (environmentId: string) => void;
-}
-
 interface ThreadTreeGroupLineProps {
-  parentRowDepth: number;
-}
-
-interface ThreadTreeLineContinuationProps {
   parentRowDepth: number;
 }
 
 interface GetThreadNodeStickyLevelArgs {
   depthOffset: number;
   node: ProjectThreadNode;
-}
-
-interface EnvironmentThreadGroupHeaderProps {
-  environmentId: string;
-  environmentProviderId: string | null;
-  representativeThread: ThreadListEntry;
-  rowDepth: number;
-  stickyLevel?: number;
-  parentLineDepth?: number;
-  childActivity: CollapsedChildActivity;
-  isCollapsed: boolean;
-  archiveThreadsPending: boolean;
-  onArchiveThreads: () => void;
-  onCreateNewThread: () => void;
-  onRenameEnvironment: () => void;
-  onToggleCollapsed: (environmentId: string) => void;
-}
-
-interface EnvironmentThreadGroupHeaderActionsProps {
-  archiveThreadsPending: boolean;
-  onArchiveThreads: () => void;
-  onCreateNewThread: () => void;
-  onRenameEnvironment: () => void;
-  onOpenChange: (open: boolean) => void;
-}
-
-interface UseArchiveEnvironmentThreadGroupActionArgs {
-  environmentId: string;
-  projectId: string;
-  selectedThreadId?: string;
-  threads: readonly ThreadListEntry[];
-}
-
-interface UseArchiveEnvironmentThreadGroupActionResult {
-  archiveThreadsPending: boolean;
-  onArchiveThreads: () => void;
-}
-
-interface UseEnvironmentThreadGroupRenameActionArgs {
-  environmentId: string;
-  representativeThread: ThreadListEntry;
-}
-
-interface UseEnvironmentThreadGroupRenameActionResult {
-  onRenameDialogOpenChange: (open: boolean) => void;
-  onRenameEnvironment: () => void;
-  onSubmitRenameEnvironment: (
-    environmentId: string,
-    name: string | null,
-  ) => void;
-  renameDialogTarget: EnvironmentRenameDialogTarget | null;
-  renameEnvironmentErrorMessage: string | null;
-  renameEnvironmentPending: boolean;
-}
-
-interface FormatArchivedEnvironmentThreadsToastTitleArgs {
-  archivedThreadIds: readonly string[];
-  threads: readonly Pick<ThreadListEntry, "id" | "title" | "titleFallback">[];
-}
-
-export function formatArchivedEnvironmentThreadsToastTitle({
-  archivedThreadIds,
-  threads,
-}: FormatArchivedEnvironmentThreadsToastTitleArgs): string {
-  if (archivedThreadIds.length !== 1) {
-    return `Archived ${archivedThreadIds.length} threads`;
-  }
-
-  const archivedThread = threads.find(
-    (thread) => thread.id === archivedThreadIds[0],
-  );
-  if (!archivedThread) {
-    return "Archived 1 thread";
-  }
-  return `Archived ${getThreadDisplayTitle(archivedThread)}`;
 }
 
 function getProjectThreadTreeEmptyStateIcon(
@@ -504,7 +349,6 @@ function getThreadRowOptions({
   dragBindings,
   depthOffset,
   isCollapsed,
-  isEnvGrouped,
   isParent,
   nestDrop,
   nodeDepth,
@@ -515,7 +359,7 @@ function getThreadRowOptions({
   const depth = getThreadRowDepth({ depthOffset, nodeDepth, variant });
   const baseOptions = {
     depth,
-    isCompact: nodeDepth > 0 || isEnvGrouped,
+    isCompact: nodeDepth > 0,
     ...(consumeClickSuppression ? { consumeClickSuppression } : {}),
     ...(dragBindings ? { dragBindings } : {}),
     ...(nestDrop ? { nestDrop } : {}),
@@ -545,7 +389,6 @@ interface GetThreadRowOptionsArgs {
   consumeClickSuppression?: ConsumeDragClickSuppression;
   dragBindings?: SidebarSortableDragBindings;
   isCollapsed: boolean;
-  isEnvGrouped: boolean;
   isParent: boolean;
   depthOffset: number;
   nestDrop?: ThreadRowNestDrop;
@@ -573,18 +416,6 @@ function ThreadTreeGroupLine({ parentRowDepth }: ThreadTreeGroupLineProps) {
   return (
     <span
       className="pointer-events-none absolute bottom-0 top-0 z-30 w-px bg-border-hairline opacity-70"
-      style={{ left: getSidebarThreadGroupLineLeft(parentRowDepth) }}
-      aria-hidden="true"
-    />
-  );
-}
-
-function ThreadTreeLineContinuation({
-  parentRowDepth,
-}: ThreadTreeLineContinuationProps) {
-  return (
-    <span
-      className="pointer-events-none absolute -bottom-0.5 top-0 z-[1] w-px bg-border-hairline opacity-70"
       style={{ left: getSidebarThreadGroupLineLeft(parentRowDepth) }}
       aria-hidden="true"
     />
@@ -656,7 +487,7 @@ const SectionDndItemRow = memo(function SectionDndItemRow({
   sectionDnd,
   ...props
 }: ThreadTreeItemRowProps) {
-  if (!sectionDnd || props.item.kind === "environment") {
+  if (!sectionDnd) {
     return <ThreadTreeItemRow sectionDnd={sectionDnd} {...props} />;
   }
 
@@ -741,459 +572,18 @@ const DroppableSectionItemRow = memo(function DroppableSectionItemRow({
   );
 });
 
-function useArchiveEnvironmentThreadGroupAction({
-  environmentId,
-  projectId,
-  selectedThreadId,
-  threads,
-}: UseArchiveEnvironmentThreadGroupActionArgs): UseArchiveEnvironmentThreadGroupActionResult {
-  const navigate = useRouteNavigate();
-  const archiveEnvironmentThreads = useArchiveEnvironmentThreads();
-  const {
-    isPending: archiveThreadsIsPending,
-    mutateAsync: archiveThreads,
-    variables,
-  } = archiveEnvironmentThreads;
-  const archiveThreadsPending =
-    archiveThreadsIsPending && variables?.id === environmentId;
-  const onArchiveThreads = useCallback(() => {
-    void archiveThreads({ id: environmentId })
-      .then((response) => {
-        appToast.success(
-          formatArchivedEnvironmentThreadsToastTitle({
-            archivedThreadIds: response.archivedThreadIds,
-            threads,
-          }),
-        );
-        if (
-          selectedThreadId &&
-          response.archivedThreadIds.includes(selectedThreadId)
-        ) {
-          navigate(`/projects/${projectId}`);
-        }
-      })
-      .catch(() => undefined);
-  }, [
-    archiveThreads,
-    environmentId,
-    navigate,
-    projectId,
-    selectedThreadId,
-    threads,
-  ]);
-
-  return {
-    archiveThreadsPending,
-    onArchiveThreads,
-  };
-}
-
-function useEnvironmentThreadGroupRenameAction({
-  environmentId,
-  representativeThread,
-}: UseEnvironmentThreadGroupRenameActionArgs): UseEnvironmentThreadGroupRenameActionResult {
-  const renameDialog = useDialogState<EnvironmentRenameDialogTarget>();
-  const updateEnvironment = useUpdateEnvironment();
-  const {
-    error,
-    isPending,
-    mutate: updateEnvironmentMutate,
-    reset: resetUpdateEnvironment,
-    variables,
-  } = updateEnvironment;
-  const renameEnvironmentPending = isPending && variables?.id === environmentId;
-  const renameEnvironmentErrorMessage =
-    error && variables?.id === environmentId
-      ? getMutationErrorMessage({
-          error,
-          fallbackMessage: "Failed to update environment.",
-        })
-      : null;
-  const { onClose, onOpen, onOpenChange, target } = renameDialog;
-
-  const onRenameEnvironment = useCallback(() => {
-    resetUpdateEnvironment();
-    onOpen({
-      ...(representativeThread.environmentBranchName !== null
-        ? { branchName: representativeThread.environmentBranchName }
-        : {}),
-      canClearName: representativeThread.environmentName !== null,
-      id: environmentId,
-      currentName: representativeThread.environmentName ?? "",
-    });
-  }, [environmentId, onOpen, representativeThread, resetUpdateEnvironment]);
-
-  const onSubmitRenameEnvironment = useCallback(
-    (targetEnvironmentId: string, name: string | null) => {
-      updateEnvironmentMutate(
-        { id: targetEnvironmentId, name },
-        { onSuccess: onClose },
-      );
-    },
-    [onClose, updateEnvironmentMutate],
-  );
-
-  return {
-    onRenameDialogOpenChange: onOpenChange,
-    onRenameEnvironment,
-    onSubmitRenameEnvironment,
-    renameDialogTarget: target,
-    renameEnvironmentErrorMessage,
-    renameEnvironmentPending,
-  };
-}
-
-function EnvironmentThreadGroupHeaderActions({
-  archiveThreadsPending,
-  onArchiveThreads,
-  onCreateNewThread,
-  onRenameEnvironment,
-  onOpenChange,
-}: EnvironmentThreadGroupHeaderActionsProps) {
-  return (
-    <SidebarRowControls
-      primaryAction={
-        <SidebarControlButton
-          label="New thread in environment"
-          icon="MessageSquarePlus"
-          onClick={onCreateNewThread}
-        />
-      }
-    >
-      <DropdownMenu onOpenChange={onOpenChange}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Environment actions"
-            className={SIDEBAR_CONTROL_BUTTON_CLASS}
-          >
-            <Icon
-              name="MoreHorizontal"
-              className={COARSE_POINTER_ICON_SIZE_CLASS}
-            />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" mobileTitle="Environment actions">
-          <DropdownMenuItem
-            onSelect={() => {
-              onRenameEnvironment();
-            }}
-          >
-            <Icon name="Edit" aria-hidden="true" />
-            Rename
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={archiveThreadsPending}
-            onSelect={(event) => {
-              if (archiveThreadsPending) {
-                event.preventDefault();
-                return;
-              }
-              onArchiveThreads();
-            }}
-          >
-            <Icon name="Archive" aria-hidden="true" />
-            Archive
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </SidebarRowControls>
-  );
-}
-
-function EnvironmentThreadGroupHeader({
-  environmentId,
-  environmentProviderId,
-  representativeThread,
-  rowDepth,
-  stickyLevel,
-  parentLineDepth,
-  childActivity,
-  isCollapsed,
-  archiveThreadsPending,
-  onArchiveThreads,
-  onCreateNewThread,
-  onRenameEnvironment,
-  onToggleCollapsed,
-}: EnvironmentThreadGroupHeaderProps) {
-  const [isActionsOpen, setIsActionsOpen] = useState(false);
-  const { providers } = useSystemEnvironmentProviders();
-  const providerLookup = findEnvironmentDisplayProvider(
-    providers,
-    environmentProviderId,
-  );
-  const displayName =
-    resolveEnvironmentDisplayName(
-      {
-        name: representativeThread.environmentName,
-        branchName: representativeThread.environmentBranchName,
-        path: representativeThread.environmentPath,
-        environmentProviderId,
-      },
-      providerLookup,
-    ) ?? UNNAMED_ENVIRONMENT_LABEL;
-  const iconName = getEnvironmentLabelIconName(providerLookup);
-  const showRollupGlyph =
-    isCollapsed &&
-    (childActivity.pending ||
-      childActivity.working ||
-      childActivity.hasUnsubmittedDraft ||
-      childActivity.unread ||
-      childActivity.unreadError);
-  const className = cn(
-    SIDEBAR_HOVER_ACTIONS_ROW_CLASS,
-    stickyLevel === undefined && "relative",
-    SIDEBAR_ROW_BASE_CLASS,
-    COARSE_POINTER_COMPACT_ROW_HEIGHT_CLASS,
-  );
-  const style = {
-    paddingLeft: getSidebarThreadRowPaddingLeft(rowDepth),
-  };
-  const content = (
-    <>
-      {parentLineDepth === undefined ? null : (
-        <ThreadTreeLineContinuation parentRowDepth={parentLineDepth} />
-      )}
-      <span
-        className={cn(
-          "pointer-events-none relative z-10 inline-flex shrink-0 items-center justify-center",
-          SIDEBAR_GROUP_TEXT_CLASS,
-          COARSE_POINTER_GLYPH_BOX_CLASS,
-        )}
-        aria-hidden="true"
-      >
-        <Icon
-          name={iconName}
-          className={COARSE_POINTER_ICON_SIZE_CLASS}
-          aria-hidden="true"
-        />
-      </span>
-      <span
-        className={cn(
-          "pointer-events-none relative z-10 flex min-w-0 flex-1 items-center gap-1.5 text-left",
-          SIDEBAR_GROUP_TEXT_CLASS,
-        )}
-      >
-        <span className="min-w-0 truncate">
-          <span>{displayName}</span>
-        </span>
-        <SidebarChildToggleChevron
-          isCollapsed={isCollapsed}
-          expandLabel={`Expand ${displayName} threads`}
-          collapseLabel={`Collapse ${displayName} threads`}
-          onToggle={() => onToggleCollapsed(environmentId)}
-          revealOnHover
-        />
-      </span>
-      <span className="relative z-10 inline-flex shrink-0 items-center">
-        {showRollupGlyph ? (
-          <span
-            data-sidebar-hover-actions-open={isActionsOpen ? "true" : undefined}
-            className={cn(
-              SIDEBAR_HOVER_ACTIONS_FADE_CLASS,
-              COARSE_POINTER_ROW_ACTION_SIZE_CLASS,
-              "pointer-events-none absolute right-0 flex items-center justify-end text-subtle-foreground max-md:pointer-coarse:static max-md:pointer-coarse:shrink-0 max-md:pointer-coarse:justify-center",
-            )}
-          >
-            <CollapsedThreadStatusGlyph activity={childActivity} />
-          </span>
-        ) : null}
-        <div
-          data-sidebar-hover-actions-open={isActionsOpen ? "true" : undefined}
-          data-sidebar-hover-actions-mobile={
-            SIDEBAR_HOVER_ACTIONS_MOBILE_ALWAYS_VALUE
-          }
-          className={cn(
-            SIDEBAR_HOVER_ACTIONS_CLASS,
-            SIDEBAR_CONTROL_PAIR_SIZE_CLASS,
-            "relative flex items-center justify-end",
-            isCollapsed && "max-md:pointer-coarse:hidden",
-          )}
-        >
-          <EnvironmentThreadGroupHeaderActions
-            archiveThreadsPending={archiveThreadsPending}
-            onArchiveThreads={onArchiveThreads}
-            onCreateNewThread={onCreateNewThread}
-            onRenameEnvironment={onRenameEnvironment}
-            onOpenChange={setIsActionsOpen}
-          />
-        </div>
-      </span>
-    </>
-  );
-
-  if (stickyLevel !== undefined) {
-    return (
-      <SidebarStickyTier
-        tier="parent"
-        level={stickyLevel}
-        className={className}
-        style={style}
-      >
-        {content}
-      </SidebarStickyTier>
-    );
-  }
-
-  return (
-    <div className={className} style={style}>
-      {content}
-    </div>
-  );
-}
-
-const EnvironmentThreadGroupRow = memo(function EnvironmentThreadGroupRow({
-  projectId,
-  environmentThreadGroup,
-  depthOffset,
-  selectedThreadId,
-  isCollapsed,
-  variant,
-  onProjectSelect,
-  collapsedThreadIds,
-  collapsedEnvironmentIds,
-  onToggleThreadCollapsed,
-  onToggleEnvironmentCollapsed,
-}: EnvironmentThreadGroupRowProps) {
-  const { environmentId, environmentProviderId, nodes, stats } =
-    environmentThreadGroup;
-  const representativeNode = nodes[0];
-  const representativeThread = representativeNode.thread;
-  const nodeDepth = representativeNode.depth;
-  const rowDepth = getThreadRowDepth({
-    depthOffset,
-    nodeDepth,
-    variant,
-  });
-  const parentLineDepth =
-    nodeDepth > 0
-      ? getThreadRowDepth({
-          depthOffset,
-          nodeDepth: nodeDepth - 1,
-          variant,
-        })
-      : undefined;
-  const createThreadInEnvironment = useCreateThreadInEnvironment({
-    projectId,
-    environmentId,
-  });
-  const threads = useMemo(() => nodes.map((node) => node.thread), [nodes]);
-  const { archiveThreadsPending, onArchiveThreads } =
-    useArchiveEnvironmentThreadGroupAction({
-      environmentId,
-      projectId,
-      selectedThreadId,
-      threads,
-    });
-  const handleCreateNewThread = useCallback(() => {
-    onProjectSelect?.();
-    createThreadInEnvironment();
-  }, [createThreadInEnvironment, onProjectSelect]);
-  const {
-    onRenameDialogOpenChange,
-    onRenameEnvironment,
-    onSubmitRenameEnvironment,
-    renameDialogTarget,
-    renameEnvironmentErrorMessage,
-    renameEnvironmentPending,
-  } = useEnvironmentThreadGroupRenameAction({
-    environmentId,
-    representativeThread,
-  });
-  const nodeItems = useMemo<ProjectThreadItem[]>(
-    () => nodes.map((node) => ({ kind: "thread", node })),
-    [nodes],
-  );
-  const { itemKeys, estimateRows, getNavigationEntries, alwaysMountedKeys } =
-    useWindowedThreadItems({
-      items: nodeItems,
-      collapsedThreadIds,
-      collapsedEnvironmentIds,
-      selectedThreadId,
-    });
-
-  return (
-    <>
-      <SidebarStickyGroup className="space-y-0.5">
-        <EnvironmentThreadGroupHeader
-          environmentId={environmentId}
-          environmentProviderId={environmentProviderId}
-          representativeThread={representativeThread}
-          rowDepth={rowDepth}
-          stickyLevel={getThreadNodeStickyLevel({
-            depthOffset,
-            node: representativeNode,
-          })}
-          parentLineDepth={parentLineDepth}
-          childActivity={stats.childActivity}
-          isCollapsed={isCollapsed}
-          archiveThreadsPending={archiveThreadsPending}
-          onArchiveThreads={onArchiveThreads}
-          onCreateNewThread={handleCreateNewThread}
-          onRenameEnvironment={onRenameEnvironment}
-          onToggleCollapsed={onToggleEnvironmentCollapsed}
-        />
-        {!isCollapsed ? (
-          <div className="relative space-y-px">
-            <ThreadTreeGroupLine parentRowDepth={rowDepth} />
-            <SidebarWindowedItems
-              itemKeys={itemKeys}
-              estimateRows={estimateRows}
-              getNavigationEntries={getNavigationEntries}
-              alwaysMountedKeys={alwaysMountedKeys}
-              renderItem={(index) => {
-                const node = nodes[index];
-                if (!node) {
-                  return null;
-                }
-                return (
-                  <ThreadTreeNodeRow
-                    key={node.thread.id}
-                    projectId={projectId}
-                    node={node}
-                    depthOffset={depthOffset + 1}
-                    isEnvGrouped
-                    selectedThreadId={selectedThreadId}
-                    collapsedThreadIds={collapsedThreadIds}
-                    collapsedEnvironmentIds={collapsedEnvironmentIds}
-                    variant={variant}
-                    onProjectSelect={onProjectSelect}
-                    onToggleThreadCollapsed={onToggleThreadCollapsed}
-                    onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
-                  />
-                );
-              }}
-            />
-          </div>
-        ) : null}
-      </SidebarStickyGroup>
-      <EnvironmentRenameDialog
-        errorMessage={renameEnvironmentErrorMessage}
-        target={renameDialogTarget}
-        pending={renameEnvironmentPending}
-        onOpenChange={onRenameDialogOpenChange}
-        onRename={onSubmitRenameEnvironment}
-      />
-    </>
-  );
-});
-
 const ThreadTreeItemRow = memo(function ThreadTreeItemRow({
   projectId,
   item,
   depthOffset,
   selectedThreadId,
   collapsedThreadIds,
-  collapsedEnvironmentIds,
   variant,
   onProjectSelect,
   onCreateThreadInSection,
   onRenameSection,
   onRemoveSection,
   onToggleThreadCollapsed,
-  onToggleEnvironmentCollapsed,
   consumeClickSuppression,
   dragBindings,
   isDropTargetActive,
@@ -1208,14 +598,12 @@ const ThreadTreeItemRow = memo(function ThreadTreeItemRow({
         depthOffset={depthOffset}
         selectedThreadId={selectedThreadId}
         collapsedThreadIds={collapsedThreadIds}
-        collapsedEnvironmentIds={collapsedEnvironmentIds}
         variant={variant}
         onProjectSelect={onProjectSelect}
         onCreateThreadInSection={onCreateThreadInSection}
         onRenameSection={onRenameSection}
         onRemoveSection={onRemoveSection}
         onToggleThreadCollapsed={onToggleThreadCollapsed}
-        onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
         consumeClickSuppression={consumeClickSuppression}
         dragBindings={dragBindings}
         isDropTargetActive={isDropTargetActive}
@@ -1226,42 +614,21 @@ const ThreadTreeItemRow = memo(function ThreadTreeItemRow({
     );
   }
 
-  if (item.kind === "thread") {
-    return (
-      <ThreadTreeNodeRow
-        projectId={projectId}
-        node={item.node}
-        depthOffset={depthOffset}
-        isEnvGrouped={false}
-        selectedThreadId={selectedThreadId}
-        collapsedThreadIds={collapsedThreadIds}
-        collapsedEnvironmentIds={collapsedEnvironmentIds}
-        variant={variant}
-        onProjectSelect={onProjectSelect}
-        onToggleThreadCollapsed={onToggleThreadCollapsed}
-        onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
-        consumeClickSuppression={consumeClickSuppression}
-        dragBindings={dragBindings}
-        sectionDnd={sectionDnd}
-        sortableRef={sortableRef}
-        sortableStyle={sortableStyle}
-      />
-    );
-  }
-
   return (
-    <EnvironmentThreadGroupRow
+    <ThreadTreeNodeRow
       projectId={projectId}
-      environmentThreadGroup={item.group}
+      node={item.node}
       depthOffset={depthOffset}
       selectedThreadId={selectedThreadId}
-      isCollapsed={collapsedEnvironmentIds.has(item.group.environmentId)}
       collapsedThreadIds={collapsedThreadIds}
-      collapsedEnvironmentIds={collapsedEnvironmentIds}
       variant={variant}
       onProjectSelect={onProjectSelect}
       onToggleThreadCollapsed={onToggleThreadCollapsed}
-      onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
+      consumeClickSuppression={consumeClickSuppression}
+      dragBindings={dragBindings}
+      sectionDnd={sectionDnd}
+      sortableRef={sortableRef}
+      sortableStyle={sortableStyle}
     />
   );
 });
@@ -1379,14 +746,12 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
   depthOffset,
   selectedThreadId,
   collapsedThreadIds,
-  collapsedEnvironmentIds,
   variant,
   onProjectSelect,
   onCreateThreadInSection,
   onRenameSection,
   onRemoveSection,
   onToggleThreadCollapsed,
-  onToggleEnvironmentCollapsed,
   consumeClickSuppression,
   dragBindings,
   isDropTargetActive = false,
@@ -1440,7 +805,6 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
     useWindowedThreadItems({
       items: section.items,
       collapsedThreadIds,
-      collapsedEnvironmentIds,
       selectedThreadId,
     });
 
@@ -1485,14 +849,12 @@ const SectionTreeItemRow = memo(function SectionTreeItemRow({
                     }
                     selectedThreadId={selectedThreadId}
                     collapsedThreadIds={collapsedThreadIds}
-                    collapsedEnvironmentIds={collapsedEnvironmentIds}
                     variant={variant}
                     onProjectSelect={onProjectSelect}
                     onCreateThreadInSection={onCreateThreadInSection}
                     onRenameSection={onRenameSection}
                     onRemoveSection={onRemoveSection}
                     onToggleThreadCollapsed={onToggleThreadCollapsed}
-                    onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
                     sectionDnd={sectionDnd}
                   />
                 </Fragment>
@@ -1602,14 +964,11 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
   projectId,
   node,
   depthOffset,
-  isEnvGrouped,
   selectedThreadId,
   collapsedThreadIds,
-  collapsedEnvironmentIds,
   variant,
   onProjectSelect,
   onToggleThreadCollapsed,
-  onToggleEnvironmentCollapsed,
   consumeClickSuppression,
   dragBindings,
   sectionDnd,
@@ -1670,7 +1029,6 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
         dragBindings,
         depthOffset,
         isCollapsed,
-        isEnvGrouped,
         isParent,
         nestDrop,
         nodeDepth: node.depth,
@@ -1685,7 +1043,6 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
       depthOffset,
       dragBindings,
       isCollapsed,
-      isEnvGrouped,
       isParent,
       hasChildren,
       nestDrop,
@@ -1706,7 +1063,6 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
     useWindowedThreadItems({
       items: node.children,
       collapsedThreadIds,
-      collapsedEnvironmentIds,
       selectedThreadId,
     });
   const row = (
@@ -1758,13 +1114,9 @@ export const ThreadTreeNodeRow = memo(function ThreadTreeNodeRow({
                       depthOffset={depthOffset}
                       selectedThreadId={selectedThreadId}
                       collapsedThreadIds={collapsedThreadIds}
-                      collapsedEnvironmentIds={collapsedEnvironmentIds}
                       variant={variant}
                       onProjectSelect={onProjectSelect}
                       onToggleThreadCollapsed={onToggleThreadCollapsed}
-                      onToggleEnvironmentCollapsed={
-                        onToggleEnvironmentCollapsed
-                      }
                       sectionDnd={sectionDnd ?? undefined}
                     />
                   </Fragment>
@@ -1804,10 +1156,8 @@ interface SectionThreadTreeItemsProps {
   sortableParentKey?: string;
   selectedThreadId?: string;
   collapsedThreadIds: Set<string>;
-  collapsedEnvironmentIds: Set<string>;
   onProjectSelect?: () => void;
   onToggleThreadCollapsed: (threadId: string) => void;
-  onToggleEnvironmentCollapsed: (environmentId: string) => void;
   onCreateThreadInSection?: (sectionId: string) => void;
   onRenameSection?: (section: SidebarSectionDefinition) => void;
   onRemoveSection?: (section: SidebarSectionDefinition) => void;
@@ -1816,12 +1166,10 @@ interface SectionThreadTreeItemsProps {
 function useWindowedThreadItems({
   items,
   collapsedThreadIds,
-  collapsedEnvironmentIds,
   selectedThreadId,
 }: {
   items: readonly ProjectThreadItem[];
   collapsedThreadIds: Set<string>;
-  collapsedEnvironmentIds: Set<string>;
   selectedThreadId?: string;
 }) {
   const collapsedSectionKeyList = useAtomValue(
@@ -1831,10 +1179,9 @@ function useWindowedThreadItems({
   const rowCountContext = useMemo<ProjectThreadItemRowCountContext>(
     () => ({
       collapsedThreadIds,
-      collapsedEnvironmentIds,
       collapsedSectionKeys: new Set(collapsedSectionKeyList),
     }),
-    [collapsedThreadIds, collapsedEnvironmentIds, collapsedSectionKeyList],
+    [collapsedThreadIds, collapsedSectionKeyList],
   );
   const estimateRows = useCallback(
     (index: number) => {
@@ -1875,10 +1222,8 @@ function SectionThreadTreeItems({
   sortableParentKey,
   selectedThreadId,
   collapsedThreadIds,
-  collapsedEnvironmentIds,
   onProjectSelect,
   onToggleThreadCollapsed,
-  onToggleEnvironmentCollapsed,
   onCreateThreadInSection,
   onRenameSection,
   onRemoveSection,
@@ -1887,7 +1232,6 @@ function SectionThreadTreeItems({
     useWindowedThreadItems({
       items,
       collapsedThreadIds,
-      collapsedEnvironmentIds,
       selectedThreadId,
     });
   const rows = (
@@ -1921,11 +1265,9 @@ function SectionThreadTreeItems({
               depthOffset={depthOffset}
               selectedThreadId={selectedThreadId}
               collapsedThreadIds={collapsedThreadIds}
-              collapsedEnvironmentIds={collapsedEnvironmentIds}
               variant={variant}
               onProjectSelect={onProjectSelect}
               onToggleThreadCollapsed={onToggleThreadCollapsed}
-              onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
               onCreateThreadInSection={onCreateThreadInSection}
               onRenameSection={onRenameSection}
               onRemoveSection={onRemoveSection}
@@ -1986,11 +1328,9 @@ export const ProjectThreadTree = memo(function ProjectThreadTree({
   compareThreads,
   selectedThreadId,
   collapsedThreadIds,
-  collapsedEnvironmentIds,
   variant,
   onProjectSelect,
   onToggleThreadCollapsed,
-  onToggleEnvironmentCollapsed,
 }: ProjectThreadTreeProps) {
   const projectThreads =
     threadListState.status === "ready"
@@ -2096,10 +1436,8 @@ export const ProjectThreadTree = memo(function ProjectThreadTree({
         sortableParentKey={projectId}
         selectedThreadId={selectedThreadId}
         collapsedThreadIds={collapsedThreadIds}
-        collapsedEnvironmentIds={collapsedEnvironmentIds}
         onProjectSelect={onProjectSelect}
         onToggleThreadCollapsed={onToggleThreadCollapsed}
-        onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
       />
       {dndParentKey !== undefined && sectionDnd ? (
         <DropPreviewRow
@@ -2138,13 +1476,11 @@ export const ChronologicalSectionThreadSections = memo(
     sections = EMPTY_THREAD_SECTIONS,
     selectedThreadId,
     collapsedThreadIds,
-    collapsedEnvironmentIds,
     onProjectSelect,
     onCreateThreadInSection,
     onRenameSection,
     onRemoveSection,
     onToggleThreadCollapsed,
-    onToggleEnvironmentCollapsed,
     builtInSections,
     topLevelSectionOrder,
     onTopLevelSectionOrderChange,
@@ -2222,10 +1558,8 @@ export const ChronologicalSectionThreadSections = memo(
         variant="section"
         selectedThreadId={selectedThreadId}
         collapsedThreadIds={collapsedThreadIds}
-        collapsedEnvironmentIds={collapsedEnvironmentIds}
         onProjectSelect={onProjectSelect}
         onToggleThreadCollapsed={onToggleThreadCollapsed}
-        onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
         onCreateThreadInSection={onCreateThreadInSection}
         onRenameSection={onRenameSection}
         onRemoveSection={onRemoveSection}
@@ -2370,13 +1704,11 @@ function ProjectRowComponent({
   isCollapsed,
   compareThreads,
   collapsedThreadIds,
-  collapsedEnvironmentIds,
   isLocalPathInvalid,
   onProjectSelect,
   onCreateProjectThread,
   onToggleProjectCollapsed,
   onToggleThreadCollapsed,
-  onToggleEnvironmentCollapsed,
   consumeProjectClickSuppression,
   projectDragBindings,
   projectRowRef,
@@ -2470,12 +1802,10 @@ function ProjectRowComponent({
             progressiveDisclosureEnabled={progressiveDisclosureEnabled}
             selectedThreadId={selectedThreadId}
             collapsedThreadIds={collapsedThreadIds}
-            collapsedEnvironmentIds={collapsedEnvironmentIds}
             compareThreads={compareThreads}
             variant="section"
             onProjectSelect={onProjectSelect}
             onToggleThreadCollapsed={onToggleThreadCollapsed}
-            onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
           />
         </TopLevelSidebarSection>
       </div>
@@ -2530,30 +1860,6 @@ function hasCollapsedThreadStateChanged({
   return false;
 }
 
-function hasCollapsedEnvironmentStateChanged({
-  prev,
-  next,
-}: ProjectRowPropsComparisonArgs): boolean {
-  if (prev.collapsedEnvironmentIds === next.collapsedEnvironmentIds) {
-    return false;
-  }
-  if (prev.threadListState.status !== "ready") {
-    return false;
-  }
-
-  for (const thread of prev.threadListState.threads) {
-    if (thread.environmentId === null) continue;
-    if (
-      prev.collapsedEnvironmentIds.has(thread.environmentId) !==
-      next.collapsedEnvironmentIds.has(thread.environmentId)
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function areProjectRowPropsEqual(
   prev: ProjectRowProps,
   next: ProjectRowProps,
@@ -2571,7 +1877,6 @@ function areProjectRowPropsEqual(
     prev.onCreateProjectThread !== next.onCreateProjectThread ||
     prev.onToggleProjectCollapsed !== next.onToggleProjectCollapsed ||
     prev.onToggleThreadCollapsed !== next.onToggleThreadCollapsed ||
-    prev.onToggleEnvironmentCollapsed !== next.onToggleEnvironmentCollapsed ||
     prev.consumeProjectClickSuppression !==
       next.consumeProjectClickSuppression ||
     prev.projectDragBindings !== next.projectDragBindings ||
@@ -2596,10 +1901,7 @@ function areProjectRowPropsEqual(
   if (prev.threadListState.status !== "ready") {
     return true;
   }
-  return (
-    !hasCollapsedThreadStateChanged({ prev, next }) &&
-    !hasCollapsedEnvironmentStateChanged({ prev, next })
-  );
+  return !hasCollapsedThreadStateChanged({ prev, next });
 }
 
 export const ProjectRow = memo(ProjectRowComponent, areProjectRowPropsEqual);

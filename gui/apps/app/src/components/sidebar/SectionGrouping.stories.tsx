@@ -141,9 +141,7 @@ export function ChronologicalSections() {
             compareThreadsForSection={() => compareStandardThreads}
             sections={STORY_SECTIONS}
             collapsedThreadIds={new Set()}
-            collapsedEnvironmentIds={new Set()}
             onToggleThreadCollapsed={noop}
-            onToggleEnvironmentCollapsed={noop}
             topLevelSectionOrder={[
               ...STORY_SECTIONS.map((section) =>
                 buildSidebarEntitySectionId("section", section.id),

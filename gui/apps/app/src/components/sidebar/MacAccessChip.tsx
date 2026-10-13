@@ -8,11 +8,11 @@ import { SidebarMenuItem } from "@/components/ui/sidebar";
 import { appToast } from "@/components/ui/app-toast";
 import { useCloudroomAccount, useSetMacAccess } from "@/hooks/queries/cloudroom-queries";
 
-export const MAC_ACCESS_LEVELS: { id: MacAccessLevel; label: string; description: string; icon: string }[] = [
-  { id: "off", label: "Off", description: "Cloud agents can't touch this Mac.", icon: "Unavailable" },
-  { id: "read-only", label: "Read", description: "Read files and logs. No changes.", icon: "Eye" },
-  { id: "ask", label: "Ask", description: "Changes need your one-tap OK.", icon: "SecurityCheck" },
-  { id: "full", label: "Full", description: "Run anything, like you would.", icon: "Zap" },
+export const MAC_ACCESS_LEVELS: { id: MacAccessLevel; label: string; description: string; icon: string; dot: string }[] = [
+  { id: "off", label: "Off", description: "Cloud agents can't touch this Mac.", icon: "Unavailable", dot: "bg-subtle-foreground/60" },
+  { id: "read-only", label: "Read", description: "Read files and logs. No changes.", icon: "Eye", dot: "bg-timeline-accent" },
+  { id: "ask", label: "Ask", description: "Changes need your one-tap OK.", icon: "SecurityCheck", dot: "bg-attention" },
+  { id: "full", label: "Full", description: "Run anything, like you would.", icon: "Zap", dot: "bg-success" },
 ];
 
 export function useMacAccessLevel() {
@@ -38,8 +38,8 @@ export function MacAccessMenu() {
     <Tooltip>
       <TooltipTrigger asChild>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-[26px] gap-1.5 rounded-md border border-border px-2 text-xs font-normal text-muted-foreground hover:text-foreground data-[state=open]:bg-state-hover data-[state=open]:text-foreground [&_[data-icon-root]]:size-3.5 [&_[data-icon-root]]:opacity-80" aria-label={`Mac access: ${current.label}`} disabled={saving}>
-            <Icon name="Laptop" aria-hidden />
+          <Button variant="ghost" className="h-6 gap-1.5 rounded-full bg-foreground/[0.06] pr-2.5 pl-2 text-xs font-normal text-muted-foreground hover:bg-foreground/10 hover:text-foreground data-[state=open]:bg-foreground/10 data-[state=open]:text-foreground" aria-label={`Mac access: ${current.label}`} disabled={saving}>
+            <span className={cn("size-1.5 shrink-0 rounded-full", current.dot)} aria-hidden />
             {current.label}
           </Button>
         </DropdownMenuTrigger>

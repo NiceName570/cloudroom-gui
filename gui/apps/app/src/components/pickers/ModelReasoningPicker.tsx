@@ -943,7 +943,7 @@ export function ModelReasoningPicker({
   const renderSplit = (modelPart: ReactNode) => (
     <div
       className={cn(
-        "inline-flex h-8 min-w-0 max-w-full items-center rounded-lg bg-surface-recessed",
+        "inline-flex h-8 min-w-0 max-w-full items-center rounded-lg",
         className,
       )}
     >

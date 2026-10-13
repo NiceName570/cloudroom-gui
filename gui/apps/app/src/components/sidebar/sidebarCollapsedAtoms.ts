@@ -19,10 +19,6 @@ export const collapsedThreadIdsAtom = createSyncedPreferenceAtom(
   "sidebar.collapsedThreads",
 );
 
-export const collapsedEnvironmentIdsAtom = createSyncedPreferenceAtom(
-  "sidebar.collapsedEnvironments",
-);
-
 export const collapsedSidebarSectionIdsAtom = createSyncedPreferenceAtom(
   "sidebar.collapsedSections",
 );

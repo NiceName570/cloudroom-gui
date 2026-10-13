@@ -44,24 +44,6 @@ function threadItem(entry: ThreadListEntry): ProjectThreadItem {
   return { kind: "thread", node: threadNode(entry) };
 }
 
-function environmentItem(
-  representative: ThreadListEntry,
-  sibling: ThreadListEntry,
-): ProjectThreadItem {
-  return {
-    kind: "environment",
-    group: {
-      environmentId: representative.environmentId ?? "env_test",
-      environmentProviderId: "git-worktree",
-      nodes: [threadNode(representative), threadNode(sibling)],
-      stats: {
-        childCount: 0,
-        childActivity: NO_COLLAPSED_CHILD_ACTIVITY,
-      },
-    },
-  };
-}
-
 function sectionItem(name: string): ProjectThreadItem {
   return {
     kind: "section",
@@ -80,8 +62,6 @@ function itemRepresentativeId(item: ProjectThreadItem): string {
   switch (item.kind) {
     case "thread":
       return item.node.thread.id;
-    case "environment":
-      return item.group.nodes[0].thread.id;
     case "section":
       return item.group.id;
   }
@@ -247,38 +227,6 @@ describe("getSidebarThreadComparator", () => {
         resolvedFirst,
       ]),
     ).toEqual(["thr_sort_z", "thr_sort_a"]);
-  });
-
-  it("uses resolved representative labels for environment items", () => {
-    const zuluTarget = thread({
-      id: "thr_target",
-      title: "Zulu environment",
-      titleFallback: "Zulu environment",
-    });
-    const environmentRepresentative = thread({
-      id: "thr_env_a",
-      environmentId: "env_a",
-      title: "@thread:thr_target",
-    });
-    const plainThread = thread({ id: "thr_plain", title: "Apple thread" });
-    const comparator = getSidebarThreadComparator("alpha", {
-      sectionNamesById: new Map(),
-      projectNamesById: new Map(),
-      threadById: new Map([[zuluTarget.id, zuluTarget]]),
-    });
-
-    expect(comparator.compareItems).toBeDefined();
-    expect(
-      [
-        environmentItem(
-          environmentRepresentative,
-          thread({ id: "thr_env_b", environmentId: "env_a" }),
-        ),
-        threadItem(plainThread),
-      ]
-        .sort(comparator.compareItems)
-        .map(itemRepresentativeId),
-    ).toEqual(["thr_plain", "thr_env_a"]);
   });
 
   it("sorts mention-shaped section names as literal text", () => {

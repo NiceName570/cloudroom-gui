@@ -115,7 +115,6 @@ import {
   type ThreadSectionMoveDestination,
 } from "@/components/thread/ThreadSectionMoveProvider";
 import {
-  collapsedEnvironmentIdsAtom,
   collapsedThreadIdsAtom,
   collapsedProjectIdsAtom,
   collapsedSidebarSectionIdsAtom,
@@ -379,9 +378,6 @@ function getProjectThreadItemAlphaLabel(
     case "thread":
       label = getThreadDisplayTitle(item.node.thread);
       break;
-    case "environment":
-      label = getThreadDisplayTitle(item.group.nodes[0].thread);
-      break;
     case "section":
       return item.group.name;
   }
@@ -401,12 +397,10 @@ function compareProjectThreadItemsByTitleAscending(
     return labelDelta;
   }
 
-  if (left.kind !== "section" && right.kind !== "section") {
-    const leftThread =
-      left.kind === "thread" ? left.node.thread : left.group.nodes[0].thread;
-    const rightThread =
-      right.kind === "thread" ? right.node.thread : right.group.nodes[0].thread;
-    const threadIdDelta = leftThread.id.localeCompare(rightThread.id);
+  if (left.kind === "thread" && right.kind === "thread") {
+    const threadIdDelta = left.node.thread.id.localeCompare(
+      right.node.thread.id,
+    );
     if (threadIdDelta !== 0) {
       return threadIdDelta;
     }
@@ -719,14 +713,12 @@ function useGroupedModeThreadDnd({
 
 interface ProjectModeSectionsProps
   extends BuiltInSectionRenderState, GroupedModePinnedProps {
-  collapsedEnvironmentIds: Set<string>;
   collapsedThreadIds: Set<string>;
   compareThreadsForSection: SidebarSectionComparator;
   draftThreadIds: ReadonlySet<string>;
   effectivePinnedThreadIds: ReadonlySet<string>;
   onCreateProjectThread: (projectId: string) => void;
   onProjectSelect?: () => void;
-  onToggleEnvironmentCollapsed: ToggleCollapsedId;
   onToggleThreadCollapsed: ToggleCollapsedId;
   pinnedSection: BuiltInSidebarSectionOptions;
   projects: readonly ProjectResponse[];
@@ -737,7 +729,6 @@ interface ProjectModeSectionsProps
 }
 
 function ProjectModeSections({
-  collapsedEnvironmentIds,
   collapsedSectionIds,
   collapsedThreadIds,
   compareThreadsForSection,
@@ -746,7 +737,6 @@ function ProjectModeSections({
   onCreateProjectThread,
   onProjectSelect,
   onToggleCollapsed,
-  onToggleEnvironmentCollapsed,
   onToggleThreadCollapsed,
   pinnedReorderPending,
   pinnedRootNodes,
@@ -881,7 +871,10 @@ function ProjectModeSections({
   const projectGroups = useMemo(
     () =>
       projectRows.map((row) => {
-        const sectionId = buildSidebarEntitySectionId("project", row.project.id);
+        const sectionId = buildSidebarEntitySectionId(
+          "project",
+          row.project.id,
+        );
         return buildGroupSectionItem(
           row.project.id,
           sectionId,
@@ -944,12 +937,10 @@ function ProjectModeSections({
           progressiveDisclosureEnabled={progressiveDisclosureEnabled}
           selectedThreadId={selectedThreadId}
           collapsedThreadIds={collapsedThreadIds}
-          collapsedEnvironmentIds={collapsedEnvironmentIds}
           compareThreads={compareThreads}
           variant="section"
           onProjectSelect={onProjectSelect}
           onToggleThreadCollapsed={onToggleThreadCollapsed}
-          onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
         />
       ),
     },
@@ -982,14 +973,12 @@ function ProjectModeSections({
             isActive={row.isActive}
             isCollapsed={collapsedProjectIds.has(row.project.id)}
             collapsedThreadIds={collapsedThreadIds}
-            collapsedEnvironmentIds={collapsedEnvironmentIds}
             compareThreads={compareThreadsForSection(sectionId)}
             isLocalPathInvalid={row.isLocalPathInvalid}
             onProjectSelect={onProjectSelect}
             onCreateProjectThread={onCreateProjectThread}
             onToggleProjectCollapsed={toggleProjectCollapsed}
             onToggleThreadCollapsed={onToggleThreadCollapsed}
-            onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
             reorderDisabled={reorderDisabled}
             consumeProjectClickSuppression={consumeClickSuppression}
           />
@@ -1000,7 +989,6 @@ function ProjectModeSections({
 }
 
 interface SectionModeSectionsProps extends BuiltInSectionRenderState {
-  collapsedEnvironmentIds: Set<string>;
   collapsedThreadIds: Set<string>;
   compareThreadsForSection: SidebarSectionComparator;
   sections: readonly SidebarSectionDefinition[];
@@ -1008,7 +996,6 @@ interface SectionModeSectionsProps extends BuiltInSectionRenderState {
   onProjectSelect?: () => void;
   onRemoveSection: (section: SidebarSectionDefinition) => void;
   onRenameSection: (section: SidebarSectionDefinition) => void;
-  onToggleEnvironmentCollapsed: ToggleCollapsedId;
   onToggleThreadCollapsed: ToggleCollapsedId;
   pinnedSection: BuiltInSidebarSectionOptions;
   pinnedReorderPending: boolean;
@@ -1025,7 +1012,6 @@ interface SectionModeSectionsProps extends BuiltInSectionRenderState {
 }
 
 function SectionModeSections({
-  collapsedEnvironmentIds,
   collapsedSectionIds,
   collapsedThreadIds,
   compareThreadsForSection,
@@ -1036,7 +1022,6 @@ function SectionModeSections({
   onRemoveSection,
   onRenameSection,
   onToggleCollapsed,
-  onToggleEnvironmentCollapsed,
   onToggleThreadCollapsed,
   pinnedSection,
   pinnedReorderPending,
@@ -1093,13 +1078,11 @@ function SectionModeSections({
         sections={sections}
         selectedThreadId={selectedThreadId}
         collapsedThreadIds={collapsedThreadIds}
-        collapsedEnvironmentIds={collapsedEnvironmentIds}
         onProjectSelect={onProjectSelect}
         onCreateThreadInSection={onCreateThreadInSection}
         onRenameSection={onRenameSection}
         onRemoveSection={onRemoveSection}
         onToggleThreadCollapsed={onToggleThreadCollapsed}
-        onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
         topLevelSectionOrder={order}
         onTopLevelSectionOrderChange={onOrderChange}
         pinnedReorderPending={pinnedReorderPending}
@@ -1126,13 +1109,11 @@ const GROUPED_MODE_COLLAPSED_ATOMS = {
 
 interface GroupedModeSectionsProps
   extends BuiltInSectionRenderState, GroupedModePinnedProps {
-  collapsedEnvironmentIds: Set<string>;
   collapsedThreadIds: Set<string>;
   compareThreadsForSection: SidebarSectionComparator;
   draftThreadIds: ReadonlySet<string>;
   effectivePinnedThreadIds: ReadonlySet<string>;
   onProjectSelect?: () => void;
-  onToggleEnvironmentCollapsed: ToggleCollapsedId;
   onToggleThreadCollapsed: ToggleCollapsedId;
   pinnedSection: BuiltInSidebarSectionOptions;
   renderSectionDisplayOptions: (
@@ -1148,7 +1129,6 @@ interface GroupedModeSectionsProps
 }
 
 export function GroupedModeSections({
-  collapsedEnvironmentIds,
   collapsedSectionIds,
   collapsedThreadIds,
   compareThreadsForSection,
@@ -1158,7 +1138,6 @@ export function GroupedModeSections({
   mode,
   onProjectSelect,
   onToggleCollapsed,
-  onToggleEnvironmentCollapsed,
   onToggleThreadCollapsed,
   pinnedReorderPending,
   pinnedRootNodes,
@@ -1313,10 +1292,8 @@ export function GroupedModeSections({
           variant="section"
           selectedThreadId={selectedThreadId}
           collapsedThreadIds={collapsedThreadIds}
-          collapsedEnvironmentIds={collapsedEnvironmentIds}
           onProjectSelect={onProjectSelect}
           onToggleThreadCollapsed={onToggleThreadCollapsed}
-          onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
         />
       ),
     },
@@ -1363,10 +1340,8 @@ export function GroupedModeSections({
               variant="section"
               selectedThreadId={selectedThreadId}
               collapsedThreadIds={collapsedThreadIds}
-              collapsedEnvironmentIds={collapsedEnvironmentIds}
               onProjectSelect={onProjectSelect}
               onToggleThreadCollapsed={onToggleThreadCollapsed}
-              onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
             />
           </SortableSidebarSection>
         );
@@ -1581,9 +1556,6 @@ function ProjectListComponent({
   const [collapsedThreadIdList, setCollapsedThreadIdList] = useAtom(
     collapsedThreadIdsAtom,
   );
-  const [collapsedEnvironmentIdList, setCollapsedEnvironmentIdList] = useAtom(
-    collapsedEnvironmentIdsAtom,
-  );
   const setCollapsedMachineKeyList = useSetAtom(sidebarCollapsedMachinesAtom);
   const setCollapsedHarnessKeyList = useSetAtom(sidebarCollapsedHarnessesAtom);
   const [collapsedSidebarSectionIdList, setCollapsedSidebarSectionIdList] =
@@ -1654,10 +1626,6 @@ function ProjectListComponent({
     () => new Set(collapsedThreadIdList),
     [collapsedThreadIdList],
   );
-  const collapsedEnvironmentIds = useMemo(
-    () => new Set(collapsedEnvironmentIdList),
-    [collapsedEnvironmentIdList],
-  );
   const normalizedCollapsedSidebarSectionIds = useMemo(
     () => normalizeCollapsedSidebarSectionIds(collapsedSidebarSectionIdList),
     [collapsedSidebarSectionIdList],
@@ -1716,13 +1684,9 @@ function ProjectListComponent({
     }
 
     const threadIdsToExpand = new Set<string>();
-    const environmentIdsToExpand = new Set<string>();
     let currentThread: ThreadListEntry | undefined = selectedThread;
     let remainingHops = threadById.size;
     while (currentThread && remainingHops > 0) {
-      if (currentThread.environmentId !== null) {
-        environmentIdsToExpand.add(currentThread.environmentId);
-      }
       const parentThreadId = currentThread.parentThreadId;
       if (parentThreadId === null) {
         break;
@@ -1738,9 +1702,6 @@ function ProjectListComponent({
 
     setCollapsedThreadIdList((current) =>
       removeCollapsedIds(current, threadIdsToExpand),
-    );
-    setCollapsedEnvironmentIdList((current) =>
-      removeCollapsedIds(current, environmentIdsToExpand),
     );
 
     const isPinned =
@@ -1785,7 +1746,6 @@ function ProjectListComponent({
     organizationMode,
     pinnedSidebarState.effectivePinnedThreadIds,
     selectedThreadId,
-    setCollapsedEnvironmentIdList,
     setCollapsedSectionList,
     setCollapsedMachineKeyList,
     setCollapsedHarnessKeyList,
@@ -1801,15 +1761,6 @@ function ProjectListComponent({
       });
     },
     [setCollapsedThreadIdList],
-  );
-
-  const toggleEnvironmentCollapsed = useCallback<ToggleCollapsedId>(
-    (environmentId) => {
-      setCollapsedEnvironmentIdList((current) => {
-        return toggleCollapsedIdList({ current, id: environmentId });
-      });
-    },
-    [setCollapsedEnvironmentIdList],
   );
 
   const toggleSidebarSectionCollapsed =
@@ -1829,10 +1780,8 @@ function ProjectListComponent({
       rootNodes={pinnedSidebarState.rootNodes}
       selectedThreadId={selectedThreadId}
       collapsedThreadIds={collapsedThreadIds}
-      collapsedEnvironmentIds={collapsedEnvironmentIds}
       onProjectSelect={onProjectSelect}
       onToggleThreadCollapsed={toggleThreadCollapsed}
-      onToggleEnvironmentCollapsed={toggleEnvironmentCollapsed}
       isPinnedReorderPending={pinnedReorderLocked}
       onReorderPinnedRoot={handleReorderPinnedRoot}
     />
@@ -1931,14 +1880,12 @@ function ProjectListComponent({
               selectedThreadId={selectedThreadId}
               collapsedSectionIds={collapsedSidebarSectionIds}
               collapsedThreadIds={collapsedThreadIds}
-              collapsedEnvironmentIds={collapsedEnvironmentIds}
               compareThreadsForSection={compareThreadsForSection}
               renderSectionDisplayOptions={renderSectionDisplayOptions}
               isSectionDisplayOptionsOpen={isSectionDisplayOptionsOpen}
               onProjectSelect={onProjectSelect}
               onToggleCollapsed={toggleSidebarSectionCollapsed}
               onToggleThreadCollapsed={toggleThreadCollapsed}
-              onToggleEnvironmentCollapsed={toggleEnvironmentCollapsed}
             />
           )}
           renderChronological={() => (
@@ -1960,7 +1907,6 @@ function ProjectListComponent({
                 selectedThreadId={selectedThreadId}
                 collapsedSectionIds={collapsedSidebarSectionIds}
                 collapsedThreadIds={collapsedThreadIds}
-                collapsedEnvironmentIds={collapsedEnvironmentIds}
                 compareThreadsForSection={compareThreadsForSection}
                 onProjectSelect={onProjectSelect}
                 onCreateThreadInSection={handleCreateProjectlessThread}
@@ -1968,7 +1914,6 @@ function ProjectListComponent({
                 onRemoveSection={handleRemoveThreadSection}
                 onToggleCollapsed={toggleSidebarSectionCollapsed}
                 onToggleThreadCollapsed={toggleThreadCollapsed}
-                onToggleEnvironmentCollapsed={toggleEnvironmentCollapsed}
               />
             </>
           )}
@@ -1992,13 +1937,11 @@ function ProjectListComponent({
                 selectedThreadId={selectedThreadId}
                 collapsedSectionIds={collapsedSidebarSectionIds}
                 collapsedThreadIds={collapsedThreadIds}
-                collapsedEnvironmentIds={collapsedEnvironmentIds}
                 compareThreadsForSection={compareThreadsForSection}
                 onProjectSelect={onProjectSelect}
                 onCreateProjectThread={handleCreateProjectThread}
                 onToggleCollapsed={toggleSidebarSectionCollapsed}
                 onToggleThreadCollapsed={toggleThreadCollapsed}
-                onToggleEnvironmentCollapsed={toggleEnvironmentCollapsed}
               />
             </>
           )}

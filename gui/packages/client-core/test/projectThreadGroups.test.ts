@@ -18,7 +18,6 @@ type ThreadListEntryOverrides = Partial<ThreadListEntry>;
 type TreeSummary =
   | string
   | { id: string; children: TreeSummary[] }
-  | { env: string; threads: TreeSummary[] }
   | { section: string; name: string; items: TreeSummary[] };
 
 function getItemAlphaLabel(item: ProjectThreadItem): string {
@@ -27,12 +26,6 @@ function getItemAlphaLabel(item: ProjectThreadItem): string {
       return item.group.name;
     case "thread":
       return item.node.thread.title ?? item.node.thread.titleFallback ?? "";
-    case "environment":
-      return (
-        item.group.nodes[0]?.thread.title ??
-        item.group.nodes[0]?.thread.titleFallback ??
-        ""
-      );
   }
 }
 
@@ -75,11 +68,6 @@ function summarizeItems(items: readonly ProjectThreadItem[]): TreeSummary[] {
     switch (item.kind) {
       case "thread":
         return summarizeNode(item.node);
-      case "environment":
-        return {
-          env: item.group.environmentId,
-          threads: item.group.nodes.map(summarizeNode),
-        };
       case "section":
         return {
           section: item.group.key,
@@ -102,15 +90,12 @@ function findNode(
       }
       continue;
     }
-    const nodes = item.kind === "thread" ? [item.node] : item.group.nodes;
-    for (const node of nodes) {
-      if (node.thread.id === threadId) {
-        return node;
-      }
-      const childNode = findNode(node.children, threadId);
-      if (childNode) {
-        return childNode;
-      }
+    if (item.node.thread.id === threadId) {
+      return item.node;
+    }
+    const childNode = findNode(item.node.children, threadId);
+    if (childNode) {
+      return childNode;
     }
   }
 
@@ -229,165 +214,33 @@ describe("buildProjectThreadGroups", () => {
     ]);
   });
 
-  it("leaves a shared environment from a provider that made no worktree loose", () => {
+  it("keeps threads sharing a worktree as separate rows at every level", () => {
+    const worktree = {
+      environmentId: "env_shared",
+      environmentProviderId: "git-worktree",
+      environmentIsWorktree: true,
+      queuedWork: "none" as const,
+    };
     const rootItems = buildProjectThreadGroups([
+      createThread({ id: "parent", createdAt: 100, ...worktree }),
+      createThread({ id: "fork", createdAt: 50, ...worktree }),
       createThread({
-        id: "sandbox-a",
-        environmentId: "env_sandbox",
-        environmentProviderId: "modal-sandbox",
-        environmentIsWorktree: false,
+        id: "review-a",
+        parentThreadId: "parent",
         createdAt: 10,
+        ...worktree,
       }),
       createThread({
-        id: "sandbox-b",
-        environmentId: "env_sandbox",
-        environmentProviderId: "modal-sandbox",
-        environmentIsWorktree: false,
+        id: "review-b",
+        parentThreadId: "parent",
         createdAt: 20,
-      }),
-    ]);
-
-    expect(summarizeItems(rootItems)).toEqual(["sandbox-b", "sandbox-a"]);
-  });
-
-  it("groups a checkout provider's threads when its directory is a linked worktree", () => {
-    const rootItems = buildProjectThreadGroups([
-      createThread({
-        id: "checkout-a",
-        environmentId: "env_checkout",
-        environmentProviderId: "project-checkout",
-        environmentIsWorktree: true,
-        createdAt: 10,
-      }),
-      createThread({
-        id: "checkout-b",
-        environmentId: "env_checkout",
-        environmentProviderId: "project-checkout",
-        environmentIsWorktree: true,
-        createdAt: 20,
+        ...worktree,
       }),
     ]);
 
     expect(summarizeItems(rootItems)).toEqual([
-      { env: "env_checkout", threads: ["checkout-b", "checkout-a"] },
-    ]);
-    const [group] = rootItems;
-    expect(
-      group.kind === "environment" && group.group.environmentProviderId,
-    ).toBe("project-checkout");
-  });
-
-  it("leaves threads sharing the project's own checkout loose", () => {
-    const rootItems = buildProjectThreadGroups([
-      createThread({
-        id: "checkout-a",
-        environmentId: "env_checkout",
-        environmentProviderId: "project-checkout",
-        environmentIsWorktree: false,
-        createdAt: 10,
-      }),
-      createThread({
-        id: "checkout-b",
-        environmentId: "env_checkout",
-        environmentProviderId: "project-checkout",
-        environmentIsWorktree: false,
-        createdAt: 20,
-      }),
-    ]);
-
-    expect(summarizeItems(rootItems)).toEqual(["checkout-b", "checkout-a"]);
-  });
-
-  it("leaves a single thread on an environment ungrouped", () => {
-    const rootItems = buildProjectThreadGroups([
-      createThread({
-        id: "only-a",
-        environmentId: "env_only",
-        environmentProviderId: null,
-        createdAt: 10,
-      }),
-      createThread({
-        id: "only-b",
-        environmentId: "env_other",
-        environmentProviderId: "git-worktree",
-        environmentIsWorktree: true,
-        createdAt: 20,
-      }),
-    ]);
-
-    expect(summarizeItems(rootItems)).toEqual(["only-b", "only-a"]);
-  });
-
-  it("leaves personal threads ungrouped, one environment each", () => {
-    const rootItems = buildProjectThreadGroups([
-      createThread({
-        id: "notes",
-        environmentId: "env_notes",
-        environmentProviderId: "personal-workspace",
-        environmentIsWorktree: false,
-        createdAt: 10,
-      }),
-      createThread({
-        id: "errands",
-        environmentId: "env_errands",
-        environmentProviderId: "personal-workspace",
-        environmentIsWorktree: false,
-        createdAt: 20,
-      }),
-      createThread({
-        id: "reading",
-        environmentId: "env_reading",
-        environmentProviderId: "personal-workspace",
-        environmentIsWorktree: false,
-        createdAt: 30,
-      }),
-    ]);
-
-    expect(summarizeItems(rootItems)).toEqual(["reading", "errands", "notes"]);
-  });
-
-  it("groups shared environments at nested sibling levels", () => {
-    const rootItems = buildProjectThreadGroups([
-      createThread({
-        id: "parent",
-        createdAt: 100,
-      }),
-      createThread({
-        id: "worktree-a",
-        parentThreadId: "parent",
-        environmentId: "env_shared",
-        queuedWork: "none",
-        environmentProviderId: "git-worktree",
-        environmentIsWorktree: true,
-        createdAt: 10,
-        latestAttentionAt: 100,
-      }),
-      createThread({
-        id: "worktree-b",
-        parentThreadId: "parent",
-        environmentId: "env_shared",
-        queuedWork: "none",
-        environmentProviderId: "git-worktree",
-        environmentIsWorktree: true,
-        createdAt: 20,
-        latestAttentionAt: 200,
-      }),
-      createThread({
-        id: "loose-child",
-        parentThreadId: "parent",
-        createdAt: 5,
-        latestAttentionAt: 50,
-      }),
-    ]);
-
-    expect(summarizeItems(rootItems)).toEqual([
-      {
-        id: "parent",
-        children: [
-          { env: "env_shared", threads: ["worktree-b", "worktree-a"] },
-          "loose-child",
-        ],
-      },
+      { id: "parent", children: ["review-b", "review-a"] },
+      "fork",
     ]);
   });
 

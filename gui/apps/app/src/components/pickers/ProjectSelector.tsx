@@ -432,7 +432,7 @@ function RepoSuggestionsGroup({
                 </span>
               )}
             </span>
-            <span className="flex shrink-0 items-center gap-1 rounded border px-1.5 text-[0.6875rem] leading-4 text-muted-foreground group-data-[selected=true]:border-primary/50 group-data-[selected=true]:text-primary">
+            <span className="flex shrink-0 items-center gap-1 rounded border px-1.5 text-[0.6875rem] leading-4 text-muted-foreground group-data-[selected=true]:border-primary group-data-[selected=true]:bg-primary group-data-[selected=true]:text-primary-foreground">
               {adding ? (
                 <>
                   <Icon name="Loading" className="size-3 animate-spin" />

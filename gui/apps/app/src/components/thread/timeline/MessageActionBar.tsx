@@ -334,7 +334,7 @@ function MessageTimestamp({
         <time
           dateTime={date.toISOString()}
           className={cn(
-            "absolute top-0 flex h-5 items-center whitespace-nowrap text-xs tabular-nums text-muted-foreground",
+            "absolute top-0 flex h-5 items-center whitespace-nowrap text-xs tabular-nums text-muted-foreground/45 hover:text-subtle-foreground",
             HOVER_REVEAL_CLASS,
           )}
           style={style}

@@ -678,7 +678,11 @@ function FollowUpPromptBoxWithComposer({
         scrollToBottomOnModifierSubmit={!steerOnPrimarySubmit}
         history={composer.history}
         focusEndKey={focusEndKey}
-        placeholder={composer.promptPlaceholder}
+        placeholder={
+          isCompactViewport
+            ? composer.compactPromptPlaceholder
+            : composer.promptPlaceholder
+        }
         containerCompactPlaceholder={composer.compactPromptPlaceholder}
         heightAnimationKey={isInteractionExpanded ? "expanded" : "compact"}
         mentionMenuPlacement="top"

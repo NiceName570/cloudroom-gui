@@ -10,8 +10,9 @@ import type { ProjectCopyProgress } from "@cloudroom/domain";
 import type { AppDeps } from "../../types.js";
 import { CloudroomError, UPLOAD_PART, type CloudroomClient } from "./client.js";
 import { saveProjectCopyProgress } from "./store.js";
+import { copyMacGithub } from "./sync.js";
 
-type Deps = Pick<AppDeps, "db" | "hub">;
+type Deps = Pick<AppDeps, "db" | "hub" | "config">;
 // `key` is the copy target: one folder on a shared VM, or one per thread sandbox.
 // New threads get a clone of the chosen branch (default branch if none) and `.env` files, or all files of a small project not on GitHub.
 // A GitHub project with no folder on the Mac (`localPath` null) is cloned only.
@@ -94,7 +95,7 @@ export function copyProject(deps: Deps, client: CloudroomClient, job: ProjectCop
     if (projectId) deps.hub.notifyProject(projectId, ["threads-changed"]);
   };
   report({ phase: job.clone ? "cloning" : "uploading", completed: 0, total: 0 });
-  void after.then(() => run(client, job, report))
+  void after.then(() => run(deps, client, job, report))
     .then(async (partial) => {
       if (partial) await writeFailureNote(client, job, partial).catch(() => {});
       report({ phase: "complete", completed: 0, total: 0 });
@@ -114,7 +115,7 @@ export function copyProject(deps: Deps, client: CloudroomClient, job: ProjectCop
     .finally(() => copying.delete(job.key));
 }
 
-async function run(client: CloudroomClient, job: ProjectCopyJob, report: (progress: ProjectCopyProgress) => void): Promise<string | undefined> {
+async function run(deps: Deps, client: CloudroomClient, job: ProjectCopyJob, report: (progress: ProjectCopyProgress) => void): Promise<string | undefined> {
   const target = (await client.workspace(job.workspace))?.path;
   if (!target) throw new Error("The cloud project folder is unavailable.");
   // A retry clears the last failure's note, so the agent doesn't stop waiting for files that are on their way.
@@ -123,8 +124,8 @@ async function run(client: CloudroomClient, job: ProjectCopyJob, report: (progre
   let cloneError: string | null = null;
   if (job.clone && job.repository) {
     const branch = job.teleport && job.localPath ? (await git(job.localPath, ["rev-parse", "--abbrev-ref", "HEAD"]))?.trim() : job.branch;
-    cloneError = await clone(client, target, job.repository, branch);
-    if (cloneError) cloneError = await clone(client, target, job.repository, branch);
+    cloneError = await clone(deps, client, target, job.repository, branch);
+    if (cloneError) cloneError = await clone(deps, client, target, job.repository, branch);
   }
   const cloned = job.clone && !cloneError;
   if (!cloned) report({ phase: "uploading", completed: 0, total: 0 });
@@ -191,8 +192,15 @@ async function git(cwd: string, args: string[]): Promise<string | null> {
 
 /** Returns null once the clone is in place, or why it failed. gc.auto=0: auto-packing during `git log -S` in a blobless
  * clone fills the sandbox disk with deleted packs the search still holds open. */
-async function clone(client: CloudroomClient, target: string, repository: string, branch?: string): Promise<string | null> {
-  const token = await exec("gh", ["auth", "token", "--hostname", "github.com"], { timeout: 15_000 }).then((result) => result.stdout.trim(), () => "");
+async function clone(deps: Deps, client: CloudroomClient, target: string, repository: string, branch?: string): Promise<string | null> {
+  const token = (await copyMacGithub(deps))
+    ? await exec("gh", ["auth", "token", "--hostname", "github.com"], {
+        timeout: 15_000,
+      }).then(
+        (result) => result.stdout.trim(),
+        () => "",
+      )
+    : "";
   const temporary = quote(`${target}.cloudroom-clone`);
   const result = await client.runOnVm({
     command: [
@@ -215,11 +223,13 @@ const isEnv = (path: string) => basename(path).startsWith(".env");
 
 /** `all`: every project file; `changed`: uncommitted and untracked files; `env`: only `.env` files. Ignored `.env` files always count.
  *  Throws once the files pass `limit` bytes. */
-async function localFiles(root: string, scope: "all" | "changed" | "env", limit = MAX_TOTAL): Promise<string[]> {
+export async function localFiles(root: string, scope: "all" | "changed" | "env", limit = MAX_TOTAL): Promise<string[]> {
   const listed = await git(root, ["ls-files", "-z", scope === "all" ? "--cached" : "--modified", "--others", "--exclude-standard"]);
+  // `--modified` skips staged edits and staged new files, so add what the index changed since the last commit.
+  const staged = listed === null || scope === "all" ? "" : await git(root, ["diff", "-z", "--name-only", "--cached"]) ?? "";
   const ignored = listed === null ? "" : await git(root, ["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--directory"]) ?? "";
   const env = ignored.split("\0").filter((path) => path && !path.endsWith("/") && isEnv(path));
-  const found = listed === null ? walk(root, "") : [...new Set([...listed.split("\0").filter(Boolean), ...env])];
+  const found = listed === null ? walk(root, "") : [...new Set([...listed.split("\0"), ...staged.split("\0"), ...env].filter(Boolean))];
   const files: string[] = [];
   let total = 0;
   for await (const path of found) {

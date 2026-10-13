@@ -4,6 +4,7 @@ import {
   type ReasoningLevel,
   type RuntimePermissionScope,
 } from "@get-bb/plugin-sdk/provider-bridge";
+import { spawnSync } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import type { Options, Settings } from "@anthropic-ai/claude-agent-sdk";
 import type { ClaudePermissionMode } from "../interactive-contract.js";
@@ -101,10 +102,30 @@ function usesWorkspaceSandbox(params: BuildSessionOptionsArgs): boolean {
   );
 }
 
+const LINUX_SANDBOX_PROBE_ARGS = (
+  "--ro-bind / / --dev /dev --unshare-pid --unshare-user --cap-drop ALL " +
+  "--proc /proc -- unshare -Urpm --fork true"
+).split(" ");
+let linuxSandboxWorks: boolean | undefined;
+
+// Ubuntu's user-namespace limits stop Claude's bubblewrap sandbox, so every
+// command fails and its unsandboxed retry is refused. Mirror Claude's bwrap
+// call plus the nested namespace its seccomp helper makes, once per process.
+// If it fails, skip the sandbox; Claude then asks before commands instead.
+function claudeSandboxCanStart(): boolean {
+  if (process.platform !== "linux" || process.env.VITEST) return true;
+  linuxSandboxWorks ??=
+    spawnSync("bwrap", LINUX_SANDBOX_PROBE_ARGS, {
+      stdio: "ignore",
+      timeout: 5_000,
+    }).status === 0;
+  return linuxSandboxWorks;
+}
+
 function buildWorkspaceWriteSandbox(
   params: BuildSessionOptionsArgs,
 ): Options["sandbox"] | undefined {
-  if (!usesWorkspaceSandbox(params)) {
+  if (!usesWorkspaceSandbox(params) || !claudeSandboxCanStart()) {
     return undefined;
   }
 

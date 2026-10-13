@@ -14,7 +14,7 @@ import { BbLogo } from "@/components/ui/bb-logo";
 import { appToast } from "@/components/ui/app-toast";
 import { useCreateProject } from "@/hooks/mutations/project-mutations";
 import { useUpdateGeneralSettings } from "@/hooks/mutations/settings-mutations";
-import { useCloudroomAccount, useCloudroomSignIn, useImportBb, useSetCopyLogins, useSetMacAccess } from "@/hooks/queries/cloudroom-queries";
+import { cloudCanRunHarness, useCloudroomAccount, useCloudroomSignIn, useImportBb, useMacAgents, useSetCopyLogins, useSetMacAccess } from "@/hooks/queries/cloudroom-queries";
 import { useSidebarNavigation } from "@/hooks/queries/sidebar-navigation-query";
 import { useHostDaemon } from "@/hooks/useHostDaemon";
 import { usePathPickerHost } from "@/hooks/useLocalPathPicker";
@@ -38,10 +38,12 @@ export const useOpenSetup = () => useSetAtom(openAtom);
 const STEPS = ["Sign in", "Connect an agent", "Connect GitHub", "Import your work"];
 const STEP_IDS = ["account", "agent", "github", "project"] as const;
 type SetupStepId = (typeof STEP_IDS)[number];
-type SetupDetail = "claude" | "codex" | "both" | "none" | "existing" | "found" | "folder" | "bb_import" | "chat_import";
-function track(step: SetupStepId, action: "viewed" | "started" | "done" | "skipped" | "closed" | "detected", detail: SetupDetail | null = null) {
+type SetupDetail = "claude" | "codex" | "both" | "none" | "existing" | "found" | "folder" | "bb_import" | "chat_import" | "pi" | "opencode" | "cursor" | "hermes" | "grok" | "devin";
+/** The telemetry name of an extra agent: `acp-hermes-agent` is `hermes`. */
+const agentDetail = (id: string) => id.replace(/^acp-/, "").replace(/-agent$/, "") as SetupDetail;
+function track(step: SetupStepId, action: "viewed" | "started" | "done" | "skipped" | "closed" | "detected", detail: SetupDetail | null = null, agents?: SetupDetail[]) {
   void fetchWithAppSurface("/api/v1/cloudroom/setup-step", {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ step, action, detail }),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ step, action, detail, agents }),
   }).catch(() => {});
 }
 const LATER = ["Your Cloudroom account", "Claude Code or Codex", "For private repos", "Last step"];
@@ -70,8 +72,12 @@ export function useSetupProgress() {
     retry: false,
     refetchInterval: (query) => (query.state.data?.state === "waiting" ? 1500 : false),
   });
-  const agents = { claude: claude.data?.state === "connected", codex: codex.data?.state === "connected" };
-  const done = [Boolean(accountId), agents.claude || agents.codex, github.data?.state === "connected"];
+  // An agent besides Claude Code and Codex counts once the user picks it as their default.
+  const defaultAgent = useSystemConfig().data?.generalSettings.defaultProviderId ?? null;
+  const other = defaultAgent === "claude-code" || defaultAgent === "codex" ? null : defaultAgent;
+  const otherName = useSystemProviders().data?.find((provider) => provider.id === other)?.displayName ?? other;
+  const agents = { claude: claude.data?.state === "connected", codex: codex.data?.state === "connected", other, otherName };
+  const done = [Boolean(accountId), agents.claude || agents.codex || other !== null, github.data?.state === "connected"];
   return { account, ready, offline, agents, codex, github, done, complete: done.every(Boolean), checking: account.isPending };
 }
 
@@ -218,18 +224,28 @@ function Setup({ locked, close }: { locked: boolean; close: () => void }) {
   );
 }
 
-function useFirstAgentDefault({ claude, codex }: { claude: boolean; codex: boolean }) {
+/** Makes an agent the default for new threads, in Settings and in the composer. */
+function useSetDefaultAgent() {
   const settings = useSystemConfig().data?.generalSettings;
   const update = useUpdateGeneralSettings();
   const setProvider = usePromptBoxProviderPreference().setValue;
+  return (agent: string) => {
+    if (!settings) return;
+    setProvider(agent);
+    update.mutate({ ...settings, defaultProviderId: agent });
+  };
+}
+
+function useFirstAgentDefault({ claude, codex }: { claude: boolean; codex: boolean }) {
+  const settings = useSystemConfig().data?.generalSettings;
+  const setDefault = useSetDefaultAgent();
   const assigned = useRef(false);
   const agent = claude ? "claude-code" : codex ? "codex" : null;
   useEffect(() => {
     if (assigned.current || !agent || !settings || settings.defaultProviderId !== null) return;
     assigned.current = true;
-    setProvider(agent);
-    update.mutate({ ...settings, defaultProviderId: agent });
-  }, [agent, settings, setProvider, update]);
+    setDefault(agent);
+  }, [agent, settings, setDefault]);
 }
 
 function nextStep(done: boolean[], from: number) {
@@ -239,7 +255,7 @@ function nextStep(done: boolean[], from: number) {
 
 function doneMeta(index: number, progress: ReturnType<typeof useSetupProgress>) {
   if (index === 0) return progress.account.data?.account?.email ?? "Signed in";
-  if (index === 1) return [progress.agents.claude && "Claude Code", progress.agents.codex && "Codex"].filter(Boolean).join(" + ");
+  if (index === 1) return [progress.agents.claude && "Claude Code", progress.agents.codex && "Codex", progress.agents.otherName].filter(Boolean).join(" + ");
   return progress.github.data?.email ?? "Connected";
 }
 
@@ -299,12 +315,16 @@ function Card({ on, isDefault, logo, name, detail, children }: { on?: boolean; i
   );
 }
 
+const Tick = ({ className }: { className: string }) => (
+  <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+
 const Connected = () => (
   <span className="inline-flex items-center gap-2 text-[13.5px] font-semibold text-(--ob-green)">
     <span className="grid size-[22px] place-items-center rounded-full bg-(--ob-green) duration-300 animate-in zoom-in-50">
-      <svg viewBox="0 0 24 24" className="size-[13px]" fill="none" stroke="#fff" strokeWidth={3.4} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        <path d="M20 6 9 17l-5-5" />
-      </svg>
+      <Tick className="size-[13px] text-white" />
     </span>
     Connected
   </span>
@@ -360,13 +380,20 @@ function AgentStep({ progress, next, stamped, left, choices, setChoices }: { pro
   const defaultAgent = useSystemConfig().data?.generalSettings.defaultProviderId;
   const { localHostId } = useHostDaemon();
   const claudeLocal = useClaudeConnection({ target: "local", hostId: localHostId });
+  const macAgents = useMacAgents();
   const detected = useRef(false);
   useEffect(() => {
-    if (detected.current || claudeLocal.isPending || !account.data) return;
+    if (detected.current || claudeLocal.isPending || macAgents.isPending || !account.data) return;
     detected.current = true;
     const claude = claudeLocal.data?.state === "connected", codexFound = Boolean(account.data.localLogins?.codex);
-    track("agent", "detected", claude && codexFound ? "both" : claude ? "claude" : codexFound ? "codex" : "none");
-  }, [claudeLocal.isPending, claudeLocal.data?.state, account.data]);
+    track("agent", "detected", claude && codexFound ? "both" : claude ? "claude" : codexFound ? "codex" : "none", (macAgents.data ?? []).map(agentDetail));
+  }, [claudeLocal.isPending, claudeLocal.data?.state, macAgents.isPending, macAgents.data, account.data]);
+  const setDefault = useSetDefaultAgent();
+  const pick = (agent: string) => {
+    if (agent === defaultAgent) return;
+    track("agent", "started", agentDetail(agent));
+    setDefault(agent);
+  };
   const startedAgents = useRef(new Set<"claude" | "codex">());
   const started = (agent: "claude" | "codex") => {
     if (startedAgents.current.has(agent)) return;
@@ -397,7 +424,7 @@ function AgentStep({ progress, next, stamped, left, choices, setChoices }: { pro
     onError: (error) => appToast.error(error.message),
     onSettled: () => client.invalidateQueries({ queryKey: ["cloudroom-codex-auth"] }),
   });
-  const finish = useMutation({ mutationFn: saveChoices, onSuccess: () => { track("agent", "done", agents.claude && agents.codex ? "both" : agents.claude ? "claude" : "codex"); next(); }, meta: { showErrorToast: false }, onError: (error) => appToast.error(error.message) });
+  const finish = useMutation({ mutationFn: saveChoices, onSuccess: () => { track("agent", "done", agents.other ? agentDetail(agents.other) : agents.claude && agents.codex ? "both" : agents.claude ? "claude" : "codex"); next(); }, meta: { showErrorToast: false }, onError: (error) => appToast.error(error.message) });
   const codexBrowser = codex.data?.state === "waiting" && !codex.data.user_code ? codex.data : null;
   const waiting = !account.data?.account ? "Log in first" : offline ? "Cloud unreachable" : !ready ? "Starting your cloud…" : null;
   const connectedLead = agents.claude && agents.codex ? "Agents" : agents.claude ? "Claude Code" : "Codex";
@@ -424,9 +451,10 @@ function AgentStep({ progress, next, stamped, left, choices, setChoices }: { pro
           ))}
         </Card>
       </div>
+      <MoreAgents agents={macAgents.data ?? []} picked={agents.other} pick={pick} />
       {offline && <CloudOffline />}
       {/* Hidden until an agent connects, so the choices don't distract from Connect. */}
-      {(agents.claude || agents.codex) && (ask.mac || ask.logins) && (
+      {(agents.claude || agents.codex || agents.other) && (ask.mac || ask.logins) && (
         <div className="mt-4 flex gap-6 text-[12.5px] text-(--ob-muted) duration-300 animate-in fade-in-0">
           {ask.logins && <Choice checked={copyLogins} onChange={(value) => setChoices({ ...choices, copyLogins: value })} label="Copy logins to the cloud" detail="Agent logins, API keys, and model providers." />}
           {ask.mac && <Choice checked={macAccess} onChange={(value) => setChoices({ ...choices, macAccess: value })} label="Let cloud agents use this computer" detail="Far more powerful agents. Turn off anytime." />}
@@ -434,13 +462,13 @@ function AgentStep({ progress, next, stamped, left, choices, setChoices }: { pro
       )}
       <div className="mt-8 flex items-center gap-5">
         <Cta
-          disabled={!(agents.claude || agents.codex) || finish.isPending}
+          disabled={!(agents.claude || agents.codex || agents.other) || finish.isPending}
           onClick={() => finish.mutate()}
           className={cn(left !== null && "min-w-[220px] bg-(--ob-lime) text-black shadow-[4px_4px_0_var(--ob-ink)] transition-[background-color,box-shadow] duration-300")}
         >
           {left === null ? <>Continue <Icon name="ArrowRight" aria-hidden /></> : <>Next step in<span key={left} className="-ml-1 inline-block w-[0.6em] duration-200 animate-in fade-in-0 slide-in-from-bottom-2">{left}</span></>}
         </Cta>
-        {left === null && <Note>Add the other one later in Settings.</Note>}
+        {left === null && <Note>Add more later in Settings.</Note>}
       </div>
       {left !== null && (
         <div className="mt-3.5 h-1.5 w-[360px] bg-(--ob-line)">
@@ -465,13 +493,44 @@ function CloudOffline() {
 }
 
 /** Uses the provider record so the plugin's real logo and tint load, not the generic fallback. */
-function AgentLogo({ id, className }: { id: string; className: string }) {
+function AgentLogo({ id, className, small = false }: { id: string; className: string; small?: boolean }) {
   const provider = useSystemProviders().data?.find((entry) => entry.id === id);
   const Logo = getProviderIconInfo("agent", id, provider ?? null).icon;
   return (
-    <span className={cn("grid size-11 place-items-center", className)} style={provider && getProviderIconTintStyle(provider)}>
-      <Logo className="size-6" />
+    <span className={cn("grid shrink-0 place-items-center", small ? "size-5" : "size-11", className)} style={provider && getProviderIconTintStyle(provider)}>
+      <Logo className={small ? "size-3" : "size-6"} />
     </span>
+  );
+}
+
+/** Agents besides Claude Code and Codex, installed and signed in on this Mac, as one quiet row of chips.
+ *  Picking one makes it the default agent. Nothing shows when the Mac has none. */
+function MoreAgents({ agents, picked, pick }: { agents: string[]; picked: string | null; pick: (agent: string) => void }) {
+  // Only agents the app can run here, so picking one never leaves a default it can't start.
+  const providers = useSystemProviders().data ?? [];
+  const shown = agents.flatMap((id) => providers.filter((provider) => provider.id === id));
+  if (!shown.length) return null;
+  return (
+    <div className="mt-3.5 flex flex-wrap items-center gap-1.5 text-[13px]">
+      <span className="mr-1 text-(--ob-muted)">Also on this Mac</span>
+      {shown.map(({ id, displayName }) => {
+        const on = id === picked;
+        return (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={on}
+            onClick={() => pick(id)}
+            className={cn("inline-flex h-[30px] items-center gap-1.5 border bg-(--ob-card) pr-2 pl-[5px] font-medium", on ? "border-(--ob-ink) shadow-[2px_2px_0_var(--ob-ink)]" : "border-(--ob-line) hover:border-(--ob-dash)")}
+          >
+            <AgentLogo id={id} small className="bg-(--ob-rail)" />
+            {displayName}
+            {!cloudCanRunHarness(id) && <span className="text-[11.5px] font-normal text-(--ob-muted)">Local</span>}
+            {on && <Tick className="size-3.5 text-(--ob-green)" />}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

@@ -24,39 +24,12 @@ import { buildSidebarEntitySectionId } from "@cloudroom/client-core";
 import { makeThreadListEntry } from "@cloudroom/test-helpers/domain-fixtures";
 import { makeProjectResponse } from "@/test/fixtures/projects";
 
-const mockUpdateEnvironment = vi.hoisted(() => ({
-  mutate: vi.fn(),
-  reset: vi.fn(),
-}));
-const mockArchiveEnvironmentThreads = vi.hoisted(() => ({
-  mutateAsync: vi.fn(async () => ({ ok: true, archivedThreadIds: [] })),
-}));
 const mockDraftThreadIds = vi.hoisted(() => ({
   current: new Set<string>(),
 }));
-const mockCreateThreadInEnvironment = vi.hoisted(() => vi.fn());
 
 vi.mock("@/hooks/useLocalPathPicker", () => ({
   usePathPickerHost: () => ({ hostId: null, hostName: null }),
-}));
-
-vi.mock("@/hooks/mutations/environment-mutations", () => ({
-  useArchiveEnvironmentThreads: () => ({
-    isPending: false,
-    mutateAsync: mockArchiveEnvironmentThreads.mutateAsync,
-    variables: undefined,
-  }),
-  useUpdateEnvironment: () => ({
-    error: null,
-    isPending: false,
-    mutate: mockUpdateEnvironment.mutate,
-    reset: mockUpdateEnvironment.reset,
-    variables: undefined,
-  }),
-}));
-
-vi.mock("@/hooks/useCreateThreadInEnvironment", () => ({
-  useCreateThreadInEnvironment: () => mockCreateThreadInEnvironment,
 }));
 
 vi.mock("@/hooks/usePromptDraftStorage", () => ({
@@ -97,10 +70,8 @@ function renderProjectRow(
   onToggleProjectCollapsed = vi.fn(),
   threadListState: ProjectThreadListState = { status: "ready", threads: [] },
   isActive = false,
-  collapsedEnvironmentIds: Set<string> = new Set(),
   isCollapsed = false,
 ) {
-  const onToggleEnvironmentCollapsed = vi.fn();
   const result = render(
     <TooltipProvider>
       <QueryClientProvider client={new QueryClient()}>
@@ -113,17 +84,15 @@ function renderProjectRow(
             compareThreads={() => 0}
             progressiveDisclosureEnabled
             collapsedThreadIds={new Set()}
-            collapsedEnvironmentIds={collapsedEnvironmentIds}
             isLocalPathInvalid={false}
             onToggleProjectCollapsed={onToggleProjectCollapsed}
             onToggleThreadCollapsed={vi.fn()}
-            onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
           />
         </MemoryRouter>
       </QueryClientProvider>
     </TooltipProvider>,
   );
-  return { ...result, onToggleEnvironmentCollapsed, onToggleProjectCollapsed };
+  return { ...result, onToggleProjectCollapsed };
 }
 
 function expectCollapsedActivityAtSidebarEdge(label: string) {
@@ -224,99 +193,6 @@ describe("ProjectRow interactions", () => {
     expect(projectGroup?.hasAttribute("data-sidebar-section-id")).toBe(false);
   });
 
-  it("shows generic runtime activity before a named workflow rollup", () => {
-    renderProjectRow(
-      vi.fn(),
-      {
-        status: "ready",
-        threads: [
-          makeThread({
-            id: "thr_worktree_workflow",
-            status: "active",
-            environmentId: "env_test",
-            environmentName: "Feature workspace",
-            environmentBranchName: "feat/menu-close",
-            environmentProviderId: "git-worktree",
-            environmentIsWorktree: true,
-            queuedWork: "none",
-            activity: {
-              activeWorkflowCount: 1,
-              activeBackgroundAgentCount: 0,
-              activeBackgroundCommandCount: 0,
-              activePlanModeCount: 0,
-              activeGoalCount: 0,
-            },
-            runtime: {
-              displayStatus: "active",
-              hostReconnectGraceExpiresAt: null,
-            },
-          }),
-          makeThread({
-            id: "thr_worktree_sibling",
-            environmentId: "env_test",
-            environmentName: "Feature workspace",
-            environmentBranchName: "feat/menu-close",
-            environmentProviderId: "git-worktree",
-            environmentIsWorktree: true,
-            queuedWork: "none",
-          }),
-        ],
-      },
-      false,
-      new Set(["env_test"]),
-    );
-
-    expect(
-      screen.getByRole("button", {
-        name: "Expand Feature workspace threads",
-      }),
-    ).not.toBeNull();
-    expect(screen.getByLabelText("Thread working")).not.toBeNull();
-    expect(screen.queryByLabelText("Workflow running")).toBeNull();
-  });
-
-  it("shows a working draft before named work for a collapsed environment", () => {
-    mockDraftThreadIds.current = new Set(["thr_worktree_draft"]);
-    renderProjectRow(
-      vi.fn(),
-      {
-        status: "ready",
-        threads: [
-          makeThread({
-            id: "thr_worktree_plan",
-            environmentId: "env_draft",
-            environmentName: "Draft workspace",
-            queuedWork: "none",
-            environmentProviderId: "git-worktree",
-            environmentIsWorktree: true,
-            activity: {
-              activeWorkflowCount: 0,
-              activeBackgroundAgentCount: 0,
-              activeBackgroundCommandCount: 0,
-              activePlanModeCount: 1,
-              activeGoalCount: 0,
-            },
-          }),
-          makeThread({
-            id: "thr_worktree_draft",
-            environmentId: "env_draft",
-            environmentName: "Draft workspace",
-            queuedWork: "none",
-            environmentProviderId: "git-worktree",
-            environmentIsWorktree: true,
-          }),
-        ],
-      },
-      false,
-      new Set(["env_draft"]),
-    );
-
-    expect(
-      screen.getByLabelText("Thread working with unsubmitted draft"),
-    ).not.toBeNull();
-    expect(screen.queryByLabelText("Plan mode active")).toBeNull();
-  });
-
   it("uses shared runtime precedence when a top-level section is collapsed", () => {
     const store = createStore();
     const queryClient = new QueryClient();
@@ -348,9 +224,7 @@ describe("ProjectRow interactions", () => {
                 compareThreadsForSection={() => () => 0}
                 sections={[{ id: sectionId, name: "Active work" }]}
                 collapsedThreadIds={new Set()}
-                collapsedEnvironmentIds={new Set()}
                 onToggleThreadCollapsed={vi.fn()}
-                onToggleEnvironmentCollapsed={vi.fn()}
                 topLevelSectionOrder={[
                   buildSidebarEntitySectionId("section", sectionId),
                 ]}
@@ -416,9 +290,7 @@ describe("ProjectRow interactions", () => {
                 compareThreadsForSection={() => () => 0}
                 sections={[{ id: sectionId, name: "Draft work" }]}
                 collapsedThreadIds={new Set()}
-                collapsedEnvironmentIds={new Set()}
                 onToggleThreadCollapsed={vi.fn()}
-                onToggleEnvironmentCollapsed={vi.fn()}
                 topLevelSectionOrder={[
                   buildSidebarEntitySectionId("section", sectionId),
                 ]}
@@ -467,7 +339,6 @@ describe("ProjectRow interactions", () => {
         ],
       },
       false,
-      new Set(),
       true,
     );
 
@@ -491,7 +362,6 @@ describe("ProjectRow interactions", () => {
         ],
       },
       false,
-      new Set(),
       true,
     );
 
@@ -522,147 +392,10 @@ describe("ProjectRow interactions", () => {
         ],
       },
       false,
-      new Set(),
       true,
     );
 
     expect(screen.queryByLabelText("Plan mode active")).toBeNull();
     expect(document.querySelector('[data-icon="Edit"]')).toBeNull();
-  });
-
-  it.each([false, true])(
-    "keeps environment actions touch-accessible when collapsed=%s",
-    async (isCollapsed) => {
-      renderProjectRow(
-        vi.fn(),
-        {
-          status: "ready",
-          threads: [
-            makeThread({
-              id: "thr_worktree_a",
-              environmentId: "env_test",
-              environmentName: "Feature workspace",
-              environmentBranchName: "feat/menu-close",
-              environmentProviderId: "git-worktree",
-              environmentIsWorktree: true,
-              queuedWork: "none",
-            }),
-            makeThread({
-              id: "thr_worktree_b",
-              environmentId: "env_test",
-              environmentName: "Feature workspace",
-              environmentBranchName: "feat/menu-close",
-              environmentProviderId: "git-worktree",
-              environmentIsWorktree: true,
-              queuedWork: "none",
-            }),
-          ],
-        },
-        false,
-        isCollapsed ? new Set(["env_test"]) : new Set(),
-      );
-
-      const createButton = screen.getByRole("button", {
-        name: "New thread in environment",
-      });
-      const actions = createButton.closest(".bb-sidebar-hover-actions");
-      expect(actions?.getAttribute("data-sidebar-hover-actions-mobile")).toBe(
-        "always",
-      );
-      expect(
-        actions?.contains(
-          screen.getByRole("button", { name: "Environment actions" }),
-        ),
-      ).toBe(true);
-      fireEvent.click(createButton);
-      expect(mockCreateThreadInEnvironment).toHaveBeenCalledOnce();
-
-      fireEvent.pointerDown(
-        screen.getByRole("button", { name: "Environment actions" }),
-        { button: 0 },
-      );
-      const rename = await screen.findByRole("menuitem", { name: "Rename" });
-      expect(
-        screen.getAllByRole("menuitem").map((item) => item.textContent),
-      ).toEqual(["Rename", "Archive"]);
-      fireEvent.click(rename);
-
-      expect(
-        await screen.findByRole("dialog", { name: "Rename environment" }),
-      ).not.toBeNull();
-      expect(screen.getByText("feat/menu-close")).not.toBeNull();
-      await waitFor(() => {
-        expect(screen.queryByRole("menuitem", { name: "Rename" })).toBeNull();
-      });
-    },
-  );
-
-  it("leaves threads sharing the project checkout ungrouped", () => {
-    renderProjectRow(vi.fn(), {
-      status: "ready",
-      threads: [
-        makeThread({
-          id: "thr_checkout_a",
-          environmentId: "env_checkout",
-          environmentBranchName: "main",
-          environmentProviderId: null,
-          queuedWork: "none",
-        }),
-        makeThread({
-          id: "thr_checkout_b",
-          environmentId: "env_checkout",
-          environmentBranchName: "main",
-          environmentProviderId: null,
-          queuedWork: "none",
-        }),
-      ],
-    });
-
-    expect(
-      screen.queryByRole("button", { name: "Collapse main threads" }),
-    ).toBeNull();
-  });
-
-  it("archives and renames an environment group from any provider", async () => {
-    mockArchiveEnvironmentThreads.mutateAsync.mockClear();
-    renderProjectRow(vi.fn(), {
-      status: "ready",
-      threads: [
-        makeThread({
-          id: "thr_plain_a",
-          environmentId: "env_plain",
-          environmentBranchName: "main",
-          environmentProviderId: "personal-workspace",
-          environmentIsWorktree: true,
-          queuedWork: "none",
-        }),
-        makeThread({
-          id: "thr_plain_b",
-          environmentId: "env_plain",
-          environmentBranchName: "main",
-          environmentProviderId: "personal-workspace",
-          environmentIsWorktree: true,
-          queuedWork: "none",
-        }),
-      ],
-    });
-
-    fireEvent.pointerDown(
-      screen.getByRole("button", { name: "Environment actions" }),
-      { button: 0 },
-    );
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Archive" }));
-    expect(mockArchiveEnvironmentThreads.mutateAsync).toHaveBeenCalledWith({
-      id: "env_plain",
-    });
-
-    fireEvent.pointerDown(
-      screen.getByRole("button", { name: "Environment actions" }),
-      { button: 0 },
-    );
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Rename" }));
-    expect(
-      await screen.findByRole("dialog", { name: "Rename environment" }),
-    ).not.toBeNull();
   });
 });

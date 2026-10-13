@@ -6,6 +6,7 @@ import {
   MACHINE_CREDENTIAL_HEADER,
   PHONE_SESSION_HEADER,
   SESSION_COOKIE,
+  TUNNEL_SESSION_HEADER,
   TUNNEL_TARGET_HEADER,
 } from "./protocol-headers.js";
 import {
@@ -96,6 +97,7 @@ export function requestForTunnelDo(request: Request, target: string | null): Req
   const headers = new Headers(request.headers);
   for (const name of [
     TUNNEL_TARGET_HEADER,
+    TUNNEL_SESSION_HEADER,
     MACHINE_CREDENTIAL_HEADER,
     GATE_AUTH_HEADER,
     GATE_MACHINE_ID_HEADER,
@@ -110,6 +112,10 @@ export function requestForTunnelDo(request: Request, target: string | null): Req
   if (cookie) headers.set("cookie", cookie);
   else headers.delete("cookie");
   if (target !== null) headers.set(TUNNEL_TARGET_HEADER, target);
+  const token = readCookie(request.headers.get("cookie"), SESSION_COOKIE);
+  if (request.headers.get("upgrade")?.toLowerCase() === "websocket" && token) {
+    headers.set(TUNNEL_SESSION_HEADER, token);
+  }
   headers.set(GATE_AUTH_HEADER, "session");
   return new Request(request, { headers });
 }
@@ -189,7 +195,18 @@ async function apex(request: Request, url: URL, env: Env): Promise<Response> {
       });
     }
     if (url.pathname === "/api/phone-sessions/revoke") {
-      return json({ revoked: await revokeSessions(env.DB, server.id) });
+      const revoked = await revokeSessions(env.DB, server.id);
+      const stub = env.TUNNEL_DO.get(env.TUNNEL_DO.idFromName(server.handle));
+      const closed = await stub.fetch(
+        new Request(
+          `https://${server.handle}.${env.BASE_DOMAIN}/__control/revoke-visitors`,
+          { method: "POST" },
+        ),
+      );
+      if (!closed.ok) {
+        return json({ error: "Could not close phone connections. Try again." }, 503);
+      }
+      return json({ revoked });
     }
   }
   if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/pair")) {

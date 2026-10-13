@@ -65,13 +65,11 @@ interface StoryProjectRow {
 interface InteractiveProjectListArgs {
   rows: StoryProjectRow[];
   initialCollapsedThreadIds?: ReadonlySet<string>;
-  initialCollapsedEnvironmentIds?: ReadonlySet<string>;
 }
 
 function InteractiveProjectList({
   rows,
   initialCollapsedThreadIds,
-  initialCollapsedEnvironmentIds,
 }: InteractiveProjectListArgs) {
   const resolvedRows: ProjectListRowModel[] = rows.map((row) => ({
     project: row.project ?? makeProject(),
@@ -90,23 +88,12 @@ function InteractiveProjectList({
   const [collapsedThreadIds, setCollapsedThreadIds] = useState<Set<string>>(
     () => new Set(initialCollapsedThreadIds ?? []),
   );
-  const [collapsedEnvironmentIds, setCollapsedEnvironmentIds] = useState<
-    Set<string>
-  >(() => new Set(initialCollapsedEnvironmentIds ?? []));
   const onToggleProjectCollapsed = useCallback<ToggleStoryCollapsedId>((id) => {
     setCollapsedProjectIds((current) => toggleStoryCollapsedId(current, id));
   }, []);
   const onToggleThreadCollapsed = useCallback<ToggleStoryCollapsedId>((id) => {
     setCollapsedThreadIds((current) => toggleStoryCollapsedId(current, id));
   }, []);
-  const onToggleEnvironmentCollapsed = useCallback<ToggleStoryCollapsedId>(
-    (id) => {
-      setCollapsedEnvironmentIds((current) =>
-        toggleStoryCollapsedId(current, id),
-      );
-    },
-    [],
-  );
   return (
     <SidebarMenu className="gap-1">
       {resolvedRows.map((row) => (
@@ -119,12 +106,10 @@ function InteractiveProjectList({
           isLocalPathInvalid={row.isLocalPathInvalid}
           isCollapsed={collapsedProjectIds.has(row.project.id)}
           collapsedThreadIds={collapsedThreadIds}
-          collapsedEnvironmentIds={collapsedEnvironmentIds}
           compareThreads={compareStandardThreads}
           onCreateProjectThread={noop}
           onToggleProjectCollapsed={onToggleProjectCollapsed}
           onToggleThreadCollapsed={onToggleThreadCollapsed}
-          onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
         />
       ))}
     </SidebarMenu>
@@ -136,7 +121,6 @@ interface SingleProjectArgs {
   threadListState: ProjectThreadListState;
   initialCollapsed?: boolean;
   initialCollapsedThreadIds?: ReadonlySet<string>;
-  initialCollapsedEnvironmentIds?: ReadonlySet<string>;
   isActive?: boolean;
   isLocalPathInvalid?: boolean;
 }
@@ -146,7 +130,6 @@ function singleProject({
   threadListState,
   initialCollapsed,
   initialCollapsedThreadIds,
-  initialCollapsedEnvironmentIds,
   isActive,
   isLocalPathInvalid,
 }: SingleProjectArgs) {
@@ -164,7 +147,6 @@ function singleProject({
             },
           ]}
           initialCollapsedThreadIds={initialCollapsedThreadIds}
-          initialCollapsedEnvironmentIds={initialCollapsedEnvironmentIds}
         />
       </SidebarStickyStack>
     </SidebarStage>
@@ -198,26 +180,6 @@ const rootThread = makeThread({
   titleFallback: "Stabilize Pnpm Dev Environment",
   environmentHostId: HOST_IDS.local,
   environmentBranchName: BRANCH_NAMES.default,
-  environmentProviderId: "git-worktree",
-  queuedWork: "none",
-});
-const sharedWorktreeThreadA = makeThread({
-  id: "thr_shared_wt_a",
-  title: "Refactor timeline row types",
-  titleFallback: "Refactor timeline row types",
-  environmentId: "env_shared_worktree",
-  environmentHostId: HOST_IDS.local,
-  environmentBranchName: "bb/set-default-tab-for-panel-thr_vnj2qze4fg",
-  environmentProviderId: "git-worktree",
-  queuedWork: "none",
-});
-const sharedWorktreeThreadB = makeThread({
-  id: "thr_shared_wt_b",
-  title: "Add story for env-grouped sidebar",
-  titleFallback: "Add story for env-grouped sidebar",
-  environmentId: "env_shared_worktree",
-  environmentHostId: HOST_IDS.local,
-  environmentBranchName: "bb/set-default-tab-for-panel-thr_vnj2qze4fg",
   environmentProviderId: "git-worktree",
   queuedWork: "none",
 });
@@ -440,7 +402,7 @@ export function Overview() {
       </StoryRow>
       <StoryRow
         label="deep parent nesting"
-        hint="nested parent threads past the sticky cap (4 levels), with a worktree group nested below a parent thread — scroll to see the deepest parent within the cap pin while the row past it stays loose"
+        hint="nested parent threads past the sticky cap (4 levels) — scroll to see the deepest parent within the cap pin while the row past it stays loose"
       >
         {singleProject({
           threadListState: {
@@ -466,29 +428,6 @@ export function Overview() {
           threadListState: {
             status: "ready",
             threads: [parentThread, parentChildA, parentChildB],
-          },
-        })}
-      </StoryRow>
-      <StoryRow
-        label="environment group"
-        hint="two root threads sharing one worktree environment — grouped under a worktree header that surfaces the branch"
-      >
-        {singleProject({
-          threadListState: {
-            status: "ready",
-            threads: [sharedWorktreeThreadA, sharedWorktreeThreadB],
-          },
-        })}
-      </StoryRow>
-      <StoryRow
-        label="environment starts collapsed"
-        hint="worktree header remains visible while child threads are hidden"
-      >
-        {singleProject({
-          initialCollapsedEnvironmentIds: new Set(["env_shared_worktree"]),
-          threadListState: {
-            status: "ready",
-            threads: [sharedWorktreeThreadA, sharedWorktreeThreadB],
           },
         })}
       </StoryRow>
@@ -520,102 +459,6 @@ export function Overview() {
               parentThread,
               { ...parentChildA, hasPendingInteraction: true },
               parentChildB,
-            ],
-          },
-        })}
-      </StoryRow>
-      <StoryRow
-        label="collapsed worktree — child working"
-        hint="trailing slot shows the Loading03 working spinner when a hidden child is working"
-      >
-        {singleProject({
-          initialCollapsedEnvironmentIds: new Set(["env_collapsed_busy"]),
-          threadListState: {
-            status: "ready",
-            threads: [
-              {
-                ...sharedWorktreeThreadA,
-                environmentId: "env_collapsed_busy",
-                status: "active",
-                runtime: {
-                  displayStatus: "active",
-                  hostReconnectGraceExpiresAt: null,
-                },
-              },
-              { ...sharedWorktreeThreadB, environmentId: "env_collapsed_busy" },
-            ],
-          },
-        })}
-      </StoryRow>
-      <StoryRow
-        label="collapsed worktree — child goal"
-        hint="trailing slot shows the target glyph when a hidden child has an active goal banner"
-      >
-        {singleProject({
-          initialCollapsedEnvironmentIds: new Set(["env_collapsed_goal"]),
-          threadListState: {
-            status: "ready",
-            threads: [
-              {
-                ...sharedWorktreeThreadA,
-                id: "thr_collapsed_worktree_goal",
-                environmentId: "env_collapsed_goal",
-                activity: {
-                  activeWorkflowCount: 0,
-                  activeBackgroundAgentCount: 0,
-                  activeBackgroundCommandCount: 0,
-                  activePlanModeCount: 0,
-                  activeGoalCount: 1,
-                },
-              },
-              { ...sharedWorktreeThreadB, environmentId: "env_collapsed_goal" },
-            ],
-          },
-        })}
-      </StoryRow>
-      <StoryRow
-        label="collapsed worktree — unread child"
-        hint="surfaces like a regular unread thread — the trailing slot shows the done dot"
-      >
-        {singleProject({
-          initialCollapsedEnvironmentIds: new Set(["env_collapsed_unread"]),
-          threadListState: {
-            status: "ready",
-            threads: [
-              {
-                ...sharedWorktreeThreadA,
-                environmentId: "env_collapsed_unread",
-                lastReadAt: 50,
-                latestAttentionAt: 200,
-              },
-              {
-                ...sharedWorktreeThreadB,
-                environmentId: "env_collapsed_unread",
-              },
-            ],
-          },
-        })}
-      </StoryRow>
-      <StoryRow
-        label="collapsed worktree — unread error child"
-        hint="hidden child status=error and unread — worktree header shows the destructive failure icon"
-      >
-        {singleProject({
-          initialCollapsedEnvironmentIds: new Set(["env_collapsed_error"]),
-          threadListState: {
-            status: "ready",
-            threads: [
-              {
-                ...sharedWorktreeThreadA,
-                environmentId: "env_collapsed_error",
-                status: "error",
-                lastReadAt: 50,
-                latestAttentionAt: 200,
-              },
-              {
-                ...sharedWorktreeThreadB,
-                environmentId: "env_collapsed_error",
-              },
             ],
           },
         })}

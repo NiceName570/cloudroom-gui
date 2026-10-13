@@ -8,8 +8,8 @@ import {
   type HeaderPair,
 } from "@cloudroom/tunnel-contract";
 import { relayedResponse } from "./response-encoding.js";
-import { TUNNEL_TARGET_HEADER } from "./protocol-headers.js";
-import { markServerSeen } from "./store.js";
+import { TUNNEL_SESSION_HEADER, TUNNEL_TARGET_HEADER } from "./protocol-headers.js";
+import { markServerSeen, sessionByToken } from "./store.js";
 
 export interface Env {
   TUNNEL_DO: DurableObjectNamespace;
@@ -37,6 +37,7 @@ const HOP_HEADERS = new Set([
   "sec-websocket-version",
   "sec-websocket-extensions",
   TUNNEL_TARGET_HEADER,
+  TUNNEL_SESSION_HEADER,
 ]);
 
 function forwardableHeaders(headers: Headers): HeaderPair[] {
@@ -121,6 +122,13 @@ export class TunnelDO {
       this.clientProtocolVersion = 0;
       return new Response(null, { status: 204 });
     }
+    if (
+      request.method === "POST" &&
+      url.pathname === "/__control/revoke-visitors"
+    ) {
+      this.abandonStreams("phone access revoked", "phone access revoked");
+      return new Response(null, { status: 204 });
+    }
 
     const tunnel = this.tunnelSocket();
     if (!tunnel) {
@@ -136,7 +144,28 @@ export class TunnelDO {
     }
 
     if (request.headers.get("upgrade")?.toLowerCase() === "websocket") {
-      return this.openVisitorWebSocket(request, url, tunnel, target);
+      return this.state.blockConcurrencyWhile(async () => {
+        const token = request.headers.get(TUNNEL_SESSION_HEADER);
+        if (!token || !/^[a-f0-9]{64}$/.test(token)) {
+          return new Response("Sign in required\n", { status: 401 });
+        }
+        try {
+          const [session, serverId] = await Promise.all([
+            sessionByToken(this.env.DB, token),
+            this.state.storage.get<string>("serverId"),
+          ]);
+          if (
+            !session ||
+            session.serverId !== serverId ||
+            session.target !== (target ?? null)
+          ) {
+            return new Response("Sign in required\n", { status: 401 });
+          }
+        } catch {
+          return new Response("Could not verify phone sign-in\n", { status: 503 });
+        }
+        return this.openVisitorWebSocket(request, url, tunnel, target);
+      });
     }
     return this.proxyHttp(request, url, tunnel, target);
   }
@@ -350,11 +379,23 @@ export class TunnelDO {
   }
 
   private abandonStreams(httpReason: string, wsReason: string): void {
+    const tunnel = this.tunnelSocket();
     for (const streamId of [...this.pendingHttp.keys()]) {
+      if (tunnel) {
+        this.trySend(tunnel, encodeFrame({
+          type: "close-stream", streamId, code: 1000, reason: httpReason,
+        }));
+      }
       this.failHttpStream(streamId, 502, httpReason);
     }
     for (const visitor of this.state.getWebSockets()) {
       if (!this.state.getTags(visitor).includes(TUNNEL_TAG)) {
+        if (tunnel) {
+          const { streamId } = visitor.deserializeAttachment() as { streamId: number };
+          this.trySend(tunnel, encodeFrame({
+            type: "close-stream", streamId, code: 1000, reason: wsReason,
+          }));
+        }
         try {
           visitor.close(1001, wsReason);
         } catch {}
@@ -404,6 +445,7 @@ export class TunnelDO {
   }
 
   webSocketMessage(ws: WebSocket, message: ArrayBuffer | string): void {
+    if (ws.readyState !== WS_READY_STATE_OPEN) return;
     const tags = this.state.getTags(ws);
     if (tags.includes(TUNNEL_TAG)) {
       if (typeof message === "string") return;

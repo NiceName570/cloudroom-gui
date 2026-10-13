@@ -49,7 +49,8 @@ vi.mock("@/hooks/queries/system-queries", () => ({
 const queryClient = new QueryClient();
 
 vi.mock("@cloudroom/client-core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@cloudroom/client-core")>();
+  const actual =
+    await importOriginal<typeof import("@cloudroom/client-core")>();
   return {
     ...actual,
     buildMachineThreadGroups: vi.fn(actual.buildMachineThreadGroups),
@@ -176,13 +177,11 @@ function MachineModeProbe({ threads = [] }: { threads?: ThreadListEntry[] }) {
         threadsSection={{ label: "Threads" }}
         collapsedSectionIds={collapsedSectionIdSet}
         collapsedThreadIds={new Set()}
-        collapsedEnvironmentIds={new Set()}
         compareThreadsForSection={() => () => 0}
         renderSectionDisplayOptions={() => null}
         isSectionDisplayOptionsOpen={() => false}
         onToggleCollapsed={handleToggleCollapsed}
         onToggleThreadCollapsed={vi.fn()}
-        onToggleEnvironmentCollapsed={vi.fn()}
       />
     </QueryClientProvider>
   );

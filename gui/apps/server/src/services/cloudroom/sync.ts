@@ -71,6 +71,13 @@ export async function importPiLogin(deps: Deps): Promise<void> {
   } catch (error) { console.warn(`Cloudroom Pi login import failed: ${errorMessage(error)}`); }
 }
 
+/** This Mac's custom Pi providers (keys as the Mac sees them) and packages, or null when there are none to copy. */
+export async function macPiSetup(deps: Deps): Promise<{ providers: Record<string, unknown>; packages: unknown[] } | null> {
+  const { stdout } = await promisify(execFile)(CLOUDROOM_PYTHON_PATH, ["-B", "-E", "-s", script, "pi-setup", folder(deps)], { timeout: 60_000, maxBuffer: 1024 * 1024 });
+  const setup = z.object({ providers: z.record(z.string(), z.unknown()), packages: z.array(z.unknown()) }).parse(JSON.parse(stdout));
+  return Object.keys(setup.providers).length || setup.packages.length ? setup : null;
+}
+
 export async function stopSync(deps: Deps): Promise<void> {
   if (!await readFile(join(folder(deps), "config.json")).then(() => true, () => false)) return;
   try { await promisify(execFile)(CLOUDROOM_PYTHON_PATH, ["-B", "-E", "-s", script, "stop", folder(deps)], { timeout: 15_000, maxBuffer: 64 * 1024 }); }

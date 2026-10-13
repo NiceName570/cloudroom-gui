@@ -205,6 +205,7 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
             label: "Discard",
             onClick: () => void deleteVoiceRecording(id),
           },
+          onClose: () => void deleteVoiceRecording(id),
         });
       }
     });

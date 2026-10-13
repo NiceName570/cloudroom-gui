@@ -35,30 +35,12 @@ const defaultThreadOption: ThreadRowOptions = {
 
 type RollupSignal = "working" | "unreadDone" | "needsUser" | "unreadError";
 
-const ROLLUP_SIGNALS: readonly RollupSignal[] = [
-  "working",
-  "unreadDone",
-  "needsUser",
-  "unreadError",
-];
-
 const ROLLUP_SIGNAL_LABEL: Record<RollupSignal, string> = {
   working: "Working",
   unreadDone: "Unread success",
   needsUser: "Input needed",
   unreadError: "Failed",
 };
-
-const HIDDEN_ROLLUP_COMBOS: readonly (readonly RollupSignal[])[] =
-  ROLLUP_SIGNALS.flatMap((_, index, signals) => {
-    const comboCount = 1 << signals.length;
-    if (index !== 0) return [];
-    return Array.from({ length: comboCount - 1 }, (_, comboIndex) =>
-      signals.filter(
-        (__, signalIndex) => (comboIndex + 1) & (1 << signalIndex),
-      ),
-    );
-  });
 
 function makeProject(overrides: Partial<ProjectResponse> = {}) {
   return makeSharedProject({ id: PROJECT_IDS.bb, name: "bb", ...overrides });
@@ -193,13 +175,11 @@ interface StoryProjectRow {
 interface ProjectListStageProps {
   rows: StoryProjectRow[];
   initialCollapsedThreadIds?: ReadonlySet<string>;
-  initialCollapsedEnvironmentIds?: ReadonlySet<string>;
 }
 
 function ProjectListStage({
   rows,
   initialCollapsedThreadIds,
-  initialCollapsedEnvironmentIds,
 }: ProjectListStageProps) {
   const rowModels: ProjectListRowModel[] = rows.map((row) => ({
     project: row.project ?? makeProject(),
@@ -218,21 +198,12 @@ function ProjectListStage({
   const [collapsedThreadIds, setCollapsedThreadIds] = useState<Set<string>>(
     () => new Set(initialCollapsedThreadIds ?? []),
   );
-  const [collapsedEnvironmentIds, setCollapsedEnvironmentIds] = useState<
-    Set<string>
-  >(() => new Set(initialCollapsedEnvironmentIds ?? []));
   const onToggleProjectCollapsed = useCallback<ToggleStoryCollapsedId>((id) => {
     setCollapsedProjectIds((current) => toggleCollapsedId(current, id));
   }, []);
   const onToggleThreadCollapsed = useCallback<ToggleStoryCollapsedId>((id) => {
     setCollapsedThreadIds((current) => toggleCollapsedId(current, id));
   }, []);
-  const onToggleEnvironmentCollapsed = useCallback<ToggleStoryCollapsedId>(
-    (id) =>
-      setCollapsedEnvironmentIds((current) => toggleCollapsedId(current, id)),
-    [],
-  );
-
   return (
     <SidebarFrame>
       <ProjectListShell>
@@ -247,12 +218,10 @@ function ProjectListStage({
               isLocalPathInvalid={row.isLocalPathInvalid}
               isCollapsed={collapsedProjectIds.has(row.project.id)}
               collapsedThreadIds={collapsedThreadIds}
-              collapsedEnvironmentIds={collapsedEnvironmentIds}
               compareThreads={compareStandardThreads}
               onCreateProjectThread={noop}
               onToggleProjectCollapsed={onToggleProjectCollapsed}
               onToggleThreadCollapsed={onToggleThreadCollapsed}
-              onToggleEnvironmentCollapsed={onToggleEnvironmentCollapsed}
             />
           ))}
         </SidebarMenu>
@@ -277,52 +246,6 @@ const statusThreads = {
 
 function comboKey(combo: readonly RollupSignal[]) {
   return combo.join("-");
-}
-
-function comboLabel(combo: readonly RollupSignal[]) {
-  return combo.map((signal) => ROLLUP_SIGNAL_LABEL[signal]).join(" + ");
-}
-
-function makeWorktreeComboThreads(combo: readonly RollupSignal[]) {
-  const key = comboKey(combo);
-  const environmentId = `env_rollup_${key}`;
-  const environmentFields = {
-    environmentId,
-    environmentHostId: HOST_IDS.local,
-    environmentBranchName: `bb/status-${key}`,
-    environmentProviderId: "git-worktree",
-    queuedWork: "none",
-  } satisfies Partial<ThreadListEntry>;
-
-  return {
-    environmentId,
-    threads: [
-      ...combo.map((signal, index) =>
-        makeSignalThread(signal, `thr_rollup_${key}_${index}`, {
-          ...environmentFields,
-          createdAt: 200 - index,
-        }),
-      ),
-      makeThread(`thr_rollup_${key}_idle`, "Read companion thread", {
-        ...environmentFields,
-        createdAt: 1,
-      }),
-    ],
-  };
-}
-
-function WorktreeRollupPreview({ combo }: { combo: readonly RollupSignal[] }) {
-  const { environmentId, threads } = makeWorktreeComboThreads(combo);
-  return (
-    <ProjectListStage
-      rows={[
-        {
-          threadListState: { status: "ready", threads },
-        },
-      ]}
-      initialCollapsedEnvironmentIds={new Set([environmentId])}
-    />
-  );
 }
 
 function makeParentRollupThreads(combo: readonly RollupSignal[]) {
@@ -411,31 +334,6 @@ export function ProductionStates() {
             hasComposerDraft
           />
         </ThreadRowStage>
-      </StoryRow>
-    </StoryCard>
-  );
-}
-
-export function HiddenRollupCombinations() {
-  return (
-    <StoryCard labelWidth="190px">
-      <StoryRow
-        label="worktree rollups"
-        hint="Each non-empty hidden-state combo rendered through the real collapsed worktree path."
-      >
-        <div className="grid w-full max-w-[900px] gap-2">
-          {HIDDEN_ROLLUP_COMBOS.map((combo) => (
-            <div
-              key={comboKey(combo)}
-              className="grid gap-2 rounded-md border border-border bg-background p-2 text-sm md:grid-cols-[minmax(180px,1fr)_minmax(320px,460px)]"
-            >
-              <div className="self-center text-muted-foreground">
-                {comboLabel(combo)}
-              </div>
-              <WorktreeRollupPreview combo={combo} />
-            </div>
-          ))}
-        </div>
       </StoryRow>
     </StoryCard>
   );

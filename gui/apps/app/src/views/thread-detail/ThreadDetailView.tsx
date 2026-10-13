@@ -2598,7 +2598,7 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground hover:text-foreground"
+            className="h-7 gap-1.5 px-2 text-xs text-muted-foreground opacity-35 transition-[color,background-color,opacity] hover:text-foreground hover:opacity-100 focus-visible:opacity-100"
             onClick={reportBug}
           >
             <Icon name="Bug" className="size-3.5" />

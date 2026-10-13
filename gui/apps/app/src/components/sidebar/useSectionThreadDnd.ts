@@ -321,11 +321,6 @@ export function isThreadWithinSubtree(
     if (item.kind === "thread") {
       if (item.node.thread.id === candidateThreadId) return true;
       stack.push(...item.node.children);
-    } else if (item.kind === "environment") {
-      for (const node of item.group.nodes) {
-        if (node.thread.id === candidateThreadId) return true;
-        stack.push(...node.children);
-      }
     }
   }
   return false;

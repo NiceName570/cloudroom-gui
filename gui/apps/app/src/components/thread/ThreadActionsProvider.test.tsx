@@ -158,9 +158,7 @@ describe("ThreadActionsProvider archive feedback", () => {
       expect(appToast.success).toHaveBeenCalledTimes(1);
     });
     expect(appToast.message).not.toHaveBeenCalled();
-    expect(vi.mocked(appToast.success).mock.calls[0]?.[0]).toBe(
-      "Thread Archived",
-    );
+    expect(vi.mocked(appToast.success).mock.calls[0]?.[0]).toBe("Archived");
     const toastOptions = vi.mocked(appToast.success).mock.calls[0]?.[1];
     expect(toastOptions).toMatchObject({
       cancel: { label: "Undo" },
