@@ -25,15 +25,14 @@ import {
   ResourceBrowseGrid,
   ResourceCollectionPage,
   ResourceCollectionViewport,
-  ResourceCreateButton,
   ResourceListState,
   ResourceFilterMenu,
   ResourceMeta,
   ResourceRow,
   ResourceSortMenu,
   ResourceTemplateBrowseCard,
-  ResourceToolbar,
 } from "@cloudroom/shared-ui/resource-list";
+import { Input } from "@cloudroom/shared-ui/input";
 import { cn } from "@cloudroom/shared-ui/lib/utils";
 import { Button } from "@cloudroom/shared-ui/button";
 import {
@@ -790,43 +789,6 @@ function cloudNextRunAt(automation: CloudAutomation): number | null {
     : Date.parse(automation.next_run_at);
 }
 
-function AutomationSummary({
-  entries,
-  cloud,
-  now,
-}: {
-  entries: readonly OverviewEntry[];
-  cloud: readonly CloudAutomation[];
-  now: number;
-}) {
-  const active = entries.filter(isActiveEntry);
-  const activeCloud = cloud.filter((automation) => automation.enabled);
-  const nextRunAt = Math.min(
-    ...active.flatMap(({ automation }) =>
-      "problem" in automation || automation.nextRunAt === null
-        ? []
-        : [automation.nextRunAt],
-    ),
-    ...activeCloud.flatMap((automation) => cloudNextRunAt(automation) ?? []),
-  );
-  return (
-    <>
-      <span className="text-foreground">
-        {active.length + activeCloud.length}
-      </span>{" "}
-      active
-      {Number.isFinite(nextRunAt) ? (
-        <>
-          {" · next run "}
-          <span className="text-foreground">
-            {formatTimeUntil(nextRunAt, now)}
-          </span>
-        </>
-      ) : null}
-    </>
-  );
-}
-
 export function AutomationOverviewView({
   entries,
   error,
@@ -1089,12 +1051,25 @@ export function AutomationOverviewView({
         .filter((automation) => !automation.enabled)
         .map(cloudItem),
     ];
+    const nextRunAt = Math.min(
+      ...activeItems.flatMap((item) => item.nextRunAt ?? []),
+    );
     body = (
       <div className="pb-4">
         {activeItems.length > 0 ? (
           <>
-            <div className="pb-1 text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">
-              Active · {activeItems.length}
+            <div className="flex items-baseline justify-between pb-1">
+              <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground/70">
+                Active · {activeItems.length}
+              </span>
+              {Number.isFinite(nextRunAt) ? (
+                <span className="text-xs text-muted-foreground">
+                  next run{" "}
+                  <span className="font-mono text-foreground">
+                    {formatTimeUntil(nextRunAt, now)}
+                  </span>
+                </span>
+              ) : null}
             </div>
             <div className="divide-y divide-foreground/10 border-b border-foreground/10">
               {activeItems.map((item) => item.node)}
@@ -1134,12 +1109,11 @@ export function AutomationOverviewView({
     <ResourceCollectionPage
       id="automations-collection"
       description={
-        entries !== null && entries.length + cloudRows.length > 0 ? (
-          <AutomationSummary entries={entries} cloud={cloudRows} now={now} />
-        ) : (
-          "Manage scheduled Cloudroom work across projects and folders. Automations run recurring or one-time tasks without manual prompting."
-        )
+        entries !== null && entries.length + cloudRows.length === 0
+          ? "Manage scheduled Cloudroom work across projects and folders. Automations run recurring or one-time tasks without manual prompting."
+          : undefined
       }
+      underlineTabs
       modes={[
         {
           id: "installed",
@@ -1152,11 +1126,76 @@ export function AutomationOverviewView({
       activeMode={activeMode}
       onModeChange={onModeChange}
       actions={
-        <ResourceCreateButton
-          label="New automation"
-          templates={AUTOMATION_CREATE_TEMPLATES}
-          onCreate={onCreateViaChat}
-        />
+        <>
+          {activeMode === "installed" ? (
+            <>
+              <div className="relative w-44 sm:w-56">
+                <Icon
+                  name="Search"
+                  className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search automations"
+                  aria-label="Search automations"
+                  className="h-8 border-0 bg-muted/50 pl-8 text-sm"
+                />
+              </div>
+              <ResourceFilterMenu
+                compact
+                quiet
+                groups={[
+                  {
+                    id: "projects",
+                    label: "Projects",
+                    options: projectOptions,
+                    selectedValues: projectFilters,
+                    onChange: (values) =>
+                      setProjectFilters(
+                        values.filter(isAutomationProjectFilter),
+                      ),
+                  },
+                  {
+                    id: "status",
+                    label: "Status",
+                    options: AUTOMATION_STATUS_FILTER_OPTIONS,
+                    selectedValues: statusFilters,
+                    onChange: (values) =>
+                      setStatusFilters(values.filter(isAutomationStatusFilter)),
+                  },
+                ]}
+              />
+              <ResourceSortMenu
+                value={sortMode}
+                direction={sortDirection}
+                compact
+                quiet
+                options={[
+                  { id: "next", label: "Next run" },
+                  {
+                    id: "project",
+                    label: "Project",
+                    disabled: projectBucketCount <= 1,
+                  },
+                  { id: "alpha", label: "Automation name" },
+                ]}
+                onChange={handleSortChange}
+              />
+            </>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            aria-label="New automation"
+            className="ml-1 h-8 gap-1.5 px-2.5"
+            onClick={() => onCreateViaChat()}
+          >
+            <Icon name="Plus" className="size-3.5" aria-hidden />
+            New
+          </Button>
+        </>
       }
     >
       {activeMode === "browse" ? (
@@ -1173,60 +1212,7 @@ export function AutomationOverviewView({
           </ResourceBrowseGrid>
         </ResourceCollectionViewport>
       ) : (
-        <ResourceCollectionViewport
-          scrollId="automations-installed-results"
-          toolbar={
-            <ResourceToolbar
-              searchValue={query}
-              searchPlaceholder="Search automations"
-              onSearchChange={setQuery}
-              controls={
-                <>
-                  <ResourceFilterMenu
-                    compact
-                    groups={[
-                      {
-                        id: "projects",
-                        label: "Projects",
-                        options: projectOptions,
-                        selectedValues: projectFilters,
-                        onChange: (values) =>
-                          setProjectFilters(
-                            values.filter(isAutomationProjectFilter),
-                          ),
-                      },
-                      {
-                        id: "status",
-                        label: "Status",
-                        options: AUTOMATION_STATUS_FILTER_OPTIONS,
-                        selectedValues: statusFilters,
-                        onChange: (values) =>
-                          setStatusFilters(
-                            values.filter(isAutomationStatusFilter),
-                          ),
-                      },
-                    ]}
-                  />
-                  <ResourceSortMenu
-                    value={sortMode}
-                    direction={sortDirection}
-                    compact
-                    options={[
-                      { id: "next", label: "Next run" },
-                      {
-                        id: "project",
-                        label: "Project",
-                        disabled: projectBucketCount <= 1,
-                      },
-                      { id: "alpha", label: "Automation name" },
-                    ]}
-                    onChange={handleSortChange}
-                  />
-                </>
-              }
-            />
-          }
-        >
+        <ResourceCollectionViewport scrollId="automations-installed-results">
           {body}
         </ResourceCollectionViewport>
       )}

@@ -21,6 +21,7 @@ import type {
   ThreadLifecycleEvent,
   ThreadLifecycleNoopReason,
   ThreadOriginKind,
+  ThreadPurpose,
   ThreadSearchSourceKind,
   ThreadStatus,
   ThreadVisibility,
@@ -339,7 +340,9 @@ export function createThread(
     projectId: input.projectId,
   });
   notifier.notifyProject(input.projectId, ["threads-changed"]);
-  showProjectOfVisibleThread(db, notifier, thread);
+  if (thread.originPluginId === null && thread.parentThreadId === null) {
+    showProjectOfVisibleThread(db, notifier, thread);
+  }
   return thread;
 }
 
@@ -1392,19 +1395,6 @@ export function countLiveThreadsInEnvironment(
   );
 }
 
-export function listLiveThreadIdsInProject(
-  db: ThreadWriteConnection,
-  projectId: string,
-): string[] {
-  return db
-    .select({ id: threads.id })
-    .from(threads)
-    .where(liveThreads(eq(threads.projectId, projectId)))
-    .orderBy(asc(threads.createdAt))
-    .all()
-    .map((row) => row.id);
-}
-
 export function listLiveThreadsInEnvironment(
   db: ThreadWriteConnection,
   args: ListLiveThreadsInEnvironmentArgs,
@@ -1777,6 +1767,25 @@ export function updateThread(
     });
   }
   return updated ?? null;
+}
+
+export function setThreadPurpose(
+  db: ThreadWriteConnection,
+  notifier: DbNotifier,
+  id: string,
+  purpose: ThreadPurpose,
+): boolean {
+  const updated = db
+    .update(threads)
+    .set({ purpose })
+    .where(eq(threads.id, id))
+    .returning({ projectId: threads.projectId })
+    .get();
+  if (!updated) return false;
+  notifier.notifyThread(id, ["purpose-changed"], {
+    projectId: updated.projectId,
+  });
+  return true;
 }
 
 export interface ThreadExecutionOverride {

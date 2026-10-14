@@ -1,5 +1,6 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { SERVER_DIRECT_AI_SERVICE_IDS } from "@get-bb/plugin-sdk/internal/host-policy";
+import type { ExperimentalAiInferenceCompleteInput } from "@get-bb/plugin-sdk/ai-services";
 import { jsonObjectSchema, type JsonObject, type JsonValue } from "@cloudroom/domain";
 import {
   parseProviderModelConfig,
@@ -58,12 +59,17 @@ export const INFERENCE_POLICY = {
   hostRpcGraceMs: 1_000,
   commitMessage: { maxAttempts: 2, retryDelayMs: 0, timeoutMs: 5_000 },
   threadMetadata: { maxAttempts: 2, retryDelayMs: 250, timeoutMs: 30_000 },
+  threadPurpose: { maxAttempts: 2, retryDelayMs: 250, timeoutMs: 90_000 },
   voiceTranscription: { maxAttempts: 2, retryDelayMs: 250, timeoutMs: 10_000 },
 } as const;
+
+type InferenceReasoningEffort =
+  ExperimentalAiInferenceCompleteInput["reasoningEffort"];
 
 interface InferenceCompleteArgs<T extends TSchema> {
   model?: string;
   prompt: string;
+  reasoningEffort?: InferenceReasoningEffort;
   schema: T;
   timeoutMs?: number;
 }
@@ -130,6 +136,7 @@ interface InferenceCompleteWithFallbackArgs<T extends TSchema> {
   maxAttempts: number;
   primaryModel?: string;
   prompt: string;
+  reasoningEffort?: InferenceReasoningEffort;
   retryDelayMs: number;
   schema: T;
   timeoutMs: number;
@@ -153,6 +160,9 @@ export async function inferenceCompleteWithFallback<T extends TSchema>(
         : await inferenceComplete(deps, {
             model,
             prompt: args.prompt,
+            ...(args.reasoningEffort
+              ? { reasoningEffort: args.reasoningEffort }
+              : {}),
             schema: args.schema,
             timeoutMs: args.timeoutMs,
           });
@@ -276,7 +286,7 @@ async function completeWithAiService<T extends TSchema>(
     {
       serviceId: service.id,
       model: modelInfo.modelId,
-      reasoningEffort: "none",
+      reasoningEffort: args.reasoningEffort ?? "none",
       prompt: args.prompt,
       outputSchema: jsonObjectSchema.parse(args.schema),
       timeoutMs,
@@ -327,20 +337,29 @@ export async function inferenceComplete<T extends TSchema>(
 
   const timeoutMs = args.timeoutMs;
   const abortController = timeoutMs ? new AbortController() : null;
-  const completionPromise = getInferenceModels().complete(
-    model,
-    {
-      messages: [
-        {
-          role: "user",
-          content: args.prompt,
-          timestamp: Date.now(),
-        },
-      ],
-      tools,
-    },
-    abortController ? { signal: abortController.signal } : undefined,
-  );
+  const context = {
+    messages: [
+      {
+        role: "user" as const,
+        content: args.prompt,
+        timestamp: Date.now(),
+      },
+    ],
+    tools,
+  };
+  const options = abortController
+    ? { signal: abortController.signal }
+    : undefined;
+  const reasoning =
+    args.reasoningEffort && args.reasoningEffort !== "none"
+      ? args.reasoningEffort
+      : null;
+  const completionPromise = reasoning
+    ? getInferenceModels().completeSimple(model, context, {
+        ...options,
+        reasoning,
+      })
+    : getInferenceModels().complete(model, context, options);
 
   let timer: ReturnType<typeof setTimeout> | null = null;
   const response = timeoutMs

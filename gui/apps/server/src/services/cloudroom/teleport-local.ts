@@ -18,7 +18,7 @@ import {
   threadPluginMetadata,
   threads,
 } from "@cloudroom/db";
-import { PERSONAL_PROJECT_ID, type Thread } from "@cloudroom/domain";
+import { PERSONAL_PROJECT_ID, type TeleportLocalStep, type Thread } from "@cloudroom/domain";
 import type { AppDeps } from "../../types.js";
 import { ApiError } from "../../errors.js";
 import { resolvePrimaryHostId } from "../hosts/primary-host.js";
@@ -31,7 +31,7 @@ import { requireThreadStoragePath } from "../threads/thread-storage.js";
 import { cloudroom } from "./commands.js";
 import type { CloudroomClient } from "./client.js";
 import { SKIPPED } from "./project-copy.js";
-import { binding, teleportProgress } from "./store.js";
+import { binding, localTeleports, teleportProgress } from "./store.js";
 
 type Harness = "codex" | "pi" | "claude-code" | "acp-cursor" | "acp-opencode";
 const VM_SESSIONS: Record<Harness, string> = {
@@ -46,24 +46,28 @@ const PREVIEW_MB = 20;
 const VIEWABLE = /\.(png|jpe?g|gif|webp|heic|svg|pdf|zip|txt|md|csv|json|mp4|mov|mp3|wav)$/i;
 const exec = promisify(execFile);
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
-const moving = new Set<string>();
 // Cloud files must never land in a .git folder, where Git runs hooks and config commands on the Mac.
 // Lowercase and NFC, because macOS treats ".GIT" as ".git".
 const inGit = (path: string) => path.normalize("NFC").toLowerCase().split(/[\\/]/).includes(".git");
 
-export const teleportingToLocal = (threadId: string) => moving.has(threadId);
+export const teleportingToLocal = (threadId: string) => localTeleports.has(threadId);
 
 export async function teleportToLocal(deps: AppDeps, threadId: string): Promise<{ conflicts: number }> {
-  if (moving.has(threadId)) throw new ApiError(409, "teleport_in_progress", "Teleport to Local is already running.");
-  moving.add(threadId);
+  if (localTeleports.has(threadId)) throw new ApiError(409, "teleport_in_progress", "Teleport to Local is already running.");
+  const step = (value?: TeleportLocalStep) => {
+    if (value) localTeleports.set(threadId, value);
+    else localTeleports.delete(threadId);
+    deps.hub.notifyThread(threadId, ["status-changed"]);
+  };
+  step("stopping");
   try {
-    return await run(deps, threadId);
+    return await run(deps, threadId, step);
   } finally {
-    moving.delete(threadId);
+    step();
   }
 }
 
-async function run(deps: AppDeps, threadId: string): Promise<{ conflicts: number }> {
+async function run(deps: AppDeps, threadId: string, step: (value: TeleportLocalStep) => void): Promise<{ conflicts: number }> {
   const thread = getThread(deps.db, threadId);
   const saved = binding(deps.db, threadId);
   const harness = thread?.providerId as Harness | undefined;
@@ -79,6 +83,7 @@ async function run(deps: AppDeps, threadId: string): Promise<{ conflicts: number
 
   await cloudroom(deps).control(threadId, "stop");
   await waitUntilStopped(client, saved.sessionId);
+  step("downloading");
 
   const vmPath = (await vm(client, findNative(harness, nativeId))).toString().trim();
   if (!vmPath) throw new ApiError(409, "teleport_unavailable", "The cloud conversation file was not found. The thread stays in Cloud.");
@@ -87,10 +92,12 @@ async function run(deps: AppDeps, threadId: string): Promise<{ conflicts: number
     download(client, vmPath),
     cloudChanges(client, cloud.path, await git(environment.path, ["rev-parse", "HEAD"]), thread.createdAt),
   ]);
+  step("copying");
   if (harness === "acp-cursor" || harness === "acp-opencode") await vm(client, `rm -f ${quote(vmPath)}`).catch(() => {});
   if (harness === "acp-opencode") await importOpenCode(deps, threadId, environment, nativeId, session);
   else await installNative(harness, nativeId, vmPath, session, environment.path);
   const conflicts = await applyChanges(environment.path, changes.archive, randomUUID(), changes.base);
+  step("switching");
 
   const queued = cloudroom(deps).queue(threadId);
   deps.db.transaction((tx) => {

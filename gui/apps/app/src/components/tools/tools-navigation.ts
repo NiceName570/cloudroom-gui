@@ -80,9 +80,11 @@ export function resolveAutomationBreadcrumbs(
   pathname: string,
   resourceLabel?: string | null,
 ): ToolsBreadcrumbSegment[] | null {
-  const root = { label: "Automations", to: AUTOMATIONS_ROUTE_PATH };
-  if (pathname === AUTOMATIONS_BROWSE_ROUTE_PATH) {
-    return [root, { label: "Browse" }];
+  if (
+    pathname === AUTOMATIONS_ROUTE_PATH ||
+    pathname === AUTOMATIONS_BROWSE_ROUTE_PATH
+  ) {
+    return [{ label: "Automations" }];
   }
   for (const pattern of [
     AUTOMATION_DETAIL_ROUTE_PATH,
@@ -91,17 +93,13 @@ export function resolveAutomationBreadcrumbs(
     const match = matchPath(pattern, pathname);
     if (!match) continue;
     return [
-      root,
-      { label: "Installed", to: AUTOMATIONS_ROUTE_PATH },
+      { label: "Automations", to: AUTOMATIONS_ROUTE_PATH },
       {
         label:
           resourceLabel ??
           routeResourceLabel(match.params.automationId, "Automation"),
       },
     ];
-  }
-  if (pathname === AUTOMATIONS_ROUTE_PATH) {
-    return [root, { label: "Installed" }];
   }
   return null;
 }

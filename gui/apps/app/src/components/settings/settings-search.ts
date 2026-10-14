@@ -73,6 +73,10 @@ const SETTINGS_SEARCH_ENTRIES: readonly SettingsSearchEntry[] = [
     ["Rules", "thread naming title"],
     ["Rename vague titles", "thread naming"],
   ]),
+  ...entries("general", "Thread purpose", [
+    ["Thread purpose", "goal summary percent done progress hover"],
+    ["Reasoning effort", "thread purpose thinking"],
+  ]),
   ...entries("general", "Voice Input", [
     ["Voice Input", "dictation speech talk"],
     ["Microphone", "mic audio dictation voice"],

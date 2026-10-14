@@ -59,7 +59,7 @@ export async function localProjectNote(deps: Deps, projectId: string): Promise<s
   const project = getProject(deps.db, projectId);
   const path = project ? localProjectPath(deps, project.id) : undefined;
   if (!project || !path || githubRepository(await projectRemote(deps, project, path)) || await smallProject(path)) return undefined;
-  return `This project is not on GitHub and too large to copy, so only its \`.env\` files are here. The rest is on the user's Mac at \`${path}\`. Pull only what the task needs with \`cloudroom mac pull\`.`;
+  return `This project is not on GitHub and too large to copy, so only its \`.env\` files are here. The rest is on the user's Mac at \`${path}\`. Pull only what the task needs with \`room-cli mac pull\`.`;
 }
 
 export async function planProjectCopy(deps: Deps, client: CloudroomClient, threadId: string, workspace: string, { localPath, key = workspace, teleport = false, branch }: { localPath?: string; key?: string; teleport?: boolean; branch?: string } = {}): Promise<ProjectCopyJob | null> {
@@ -83,7 +83,7 @@ export async function planProjectCopy(deps: Deps, client: CloudroomClient, threa
 
 /** The copy shows as started at once, but its transfer waits for `after`, so it can't crowd out the first message on a slow connection.
  *  With `paused`, a copy cut off by a sleeping or unreachable sandbox waits instead of failing; the caller restarts it.
- *  `partial` says why only `.env` files arrived; the agent is told, not the user. */
+ *  `partial` says why the files are incomplete; the agent is told, not the user. */
 export function copyProject(deps: Deps, client: CloudroomClient, job: ProjectCopyJob, done?: (error?: string, partial?: string) => void, after: Promise<void> = Promise.resolve(), paused?: () => void): void {
   if (copying.has(job.key)) return;
   copying.add(job.key);
@@ -108,9 +108,13 @@ export function copyProject(deps: Deps, client: CloudroomClient, job: ProjectCop
         return;
       }
       const message = (error instanceof Error ? error.message : String(error)).slice(0, 500);
-      report({ phase: "error", completed: 0, total: 0, error: message });
+      // The files are still on the Mac, so only the agent is told and pulls what it needs. The error card stays for
+      // Teleport, whose uncommitted work must arrive, and for projects with no folder on the Mac.
+      const quiet = job.localPath !== null && !job.teleport;
+      report(quiet ? { phase: "complete", completed: 0, total: 0 } : { phase: "error", completed: 0, total: 0, error: message });
       await writeFailureNote(client, job, message).catch(() => {});
-      done?.(message);
+      if (quiet) done?.(undefined, message);
+      else done?.(message);
     })
     .finally(() => copying.delete(job.key));
 }
@@ -152,13 +156,13 @@ async function writeFailureNote(client: CloudroomClient, job: ProjectCopyJob, me
   const target = (await client.workspace(job.workspace))?.path;
   if (!target) return;
   const next = job.localPath
-    ? `The full project is on the user's Mac at \`${job.localPath}\`. Pull only what the task needs with \`cloudroom mac pull\`.`
+    ? `The full project is on the user's Mac at \`${job.localPath}\`. Pull only what the task needs with \`room-cli mac pull\`.`
     : "Tell the user, since the files are not available anywhere else.";
   const note = `Cloudroom could not copy this project into the cloud, so do not wait for more files.\n\n${message}\n\n${next}\n`;
   await vm(client, `mkdir -p -- ${quote(`${target}/.cloudroom`)} && cat > ${quote(`${target}/${FAILURE_NOTE}`)}`, Buffer.from(note));
 }
 
-/** What `cloudroom files wait` reads (ADR 0209): `copying`, then `ready` or `failed: REASON`, in a file next to the
+/** What `room-cli files wait` reads (ADR 0209): `copying`, then `ready` or `failed: REASON`, in a file next to the
  *  project folder, so Git never sees it. With `onlyIfCopying`, it changes only a copy still marked `copying`. */
 export async function writeFilesState(client: CloudroomClient, workspace: string, state: string, onlyIfCopying = false): Promise<void> {
   const target = (await client.workspace(workspace))?.path;

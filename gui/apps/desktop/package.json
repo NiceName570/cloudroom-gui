@@ -46,6 +46,7 @@
     "@cloudroom/config": "workspace:*",
     "@cloudroom/desktop-contract": "workspace:*",
     "@cloudroom/domain": "workspace:*",
+    "@cloudroom/process-utils": "workspace:*",
     "@cloudroom/server-contract": "workspace:*",
     "@cloudroom/tsconfig": "workspace:*",
     "@types/node": "^24.9.0",

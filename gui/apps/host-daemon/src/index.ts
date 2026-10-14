@@ -5,6 +5,7 @@ import { loadHostDaemonStartConfig } from "@cloudroom/config/host-daemon";
 import { loadHostDaemonEntrypointConfig } from "@cloudroom/config/host-daemon-entrypoint";
 import {
   installSafeProcessDiagnostics,
+  installSocketTypeOfServiceGuard,
   writeSafeProcessDiagnosticReport,
 } from "@cloudroom/process-utils";
 import { hasMachineSuspensionMarker } from "./suspension-marker.js";
@@ -79,6 +80,7 @@ if (isMainModule) {
     logsDir: diagnosticsLogsDir,
     processName: "host-daemon",
   });
+  installSocketTypeOfServiceGuard();
   const handleMainFailure: MainFailureHandler = (error) => {
     reportStartupFailure({ diagnosticsLogsDir, error });
   };

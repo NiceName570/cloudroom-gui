@@ -61,7 +61,7 @@ This index lists every command path that the core CLI registers. Read the task-s
 - `room-cli feedback`
 - `room-cli report`
 
-`room-cli feedback "MESSAGE"` sends David, Cloudroom's founder, a bug, friction, or idea (ADR 0158): what you did, what happened, and the exact error. Never include secrets, personal data, or the user's code. The app adds its version, OS, and thread details. It prints `{"sent":false}` while Settings → Send agent feedback is off. `room-cli report` is the old name and still works. Cloud threads use `cloudroom feedback "MESSAGE"`.
+`room-cli feedback "MESSAGE"` sends David, Cloudroom's founder, a bug, friction, or idea (ADR 0158): what you did, what happened, and the exact error. Never include secrets, personal data, or the user's code. The app adds its version, OS, and thread details. It prints `{"sent":false}` while Settings → Send agent feedback is off. `room-cli report` is the old name and still works. It works the same in Cloud threads.
 
 ## status
 

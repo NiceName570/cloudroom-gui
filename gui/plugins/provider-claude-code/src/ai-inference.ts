@@ -75,6 +75,9 @@ export function completeClaudeInference(
         "-p",
         "--model",
         input.model,
+        ...(input.reasoningEffort === "none"
+          ? []
+          : ["--effort", input.reasoningEffort]),
         "--no-session-persistence",
         "--tools",
         "",

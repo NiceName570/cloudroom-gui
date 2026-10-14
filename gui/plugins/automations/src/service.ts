@@ -58,6 +58,7 @@ import {
   writeInlineAutomationScript,
 } from "./script-files.js";
 import { errorMessage, executeAgentRun, executeScriptRun } from "./run.js";
+import { listLiveProjects } from "./sweep.js";
 
 type ServiceApi = Pick<BbPluginApi, "realtime" | "log"> & {
   sdk: {
@@ -452,16 +453,11 @@ async function projectNameById(
   bb: Pick<ServiceApi, "sdk" | "log">,
 ): Promise<Map<string, string>> {
   try {
-    const projects = projectSummaryListSchema.parse(
-      await bb.sdk.projects.list({ includePersonal: true }),
-    );
     return new Map(
-      projects
-        .filter(
-          (project) =>
-            project.deletedAt === undefined || project.deletedAt === null,
-        )
-        .map((project) => [project.id, project.name ?? project.id]),
+      (await listLiveProjects(bb)).map((project) => [
+        project.id,
+        project.name ?? project.id,
+      ]),
     );
   } catch (error) {
     bb.log.warn(
@@ -472,14 +468,6 @@ async function projectNameById(
 }
 
 const projectAvailableSchema = z.object({ id: z.string() }).passthrough();
-const projectSummarySchema = z
-  .object({
-    id: z.string(),
-    name: z.string().optional(),
-    deletedAt: z.number().nullable().optional(),
-  })
-  .passthrough();
-const projectSummaryListSchema = z.array(projectSummarySchema);
 
 async function requireProjectAvailable(
   bb: Pick<ServiceApi, "sdk">,

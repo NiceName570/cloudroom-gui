@@ -275,7 +275,13 @@ export async function transcribeVoiceInput(
   }
 
   try {
-    return await transcribeWithConfiguredModel(deps, args);
+    const text = await transcribeWithConfiguredModel(deps, args);
+    if (text.trim()) return text;
+    throw new ApiError(
+      422,
+      "empty_transcript",
+      "Voice transcription returned an empty result.",
+    );
   } catch (error) {
     const backup =
       args.file.size <= BACKUP_VOICE_MAX_BYTES

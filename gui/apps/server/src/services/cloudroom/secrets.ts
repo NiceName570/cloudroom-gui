@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { AppDeps } from "../../types.js";
 import type { CloudroomClient, SessionRecord } from "./client.js";
 
-// A cloud agent's `cloudroom secret request` reuses the Secrets plugin's form.
+// A cloud agent's `room-cli secret request` reuses the Secrets plugin's form.
 // Values go straight back to the core and never enter thread events.
 const PLUGIN_ID = "secrets";
 const RENDERER_ID = "secret-request"; // SECRET_REQUEST_RENDERER_ID in @cloudroom/plugin-interaction-contracts

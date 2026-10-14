@@ -1345,13 +1345,29 @@ export async function fetchRemoteBranches(
   }
 }
 
+/** Agents push straight to GitHub, so a local branch like `main` lags behind; compare against `origin/<branch>` when it
+ *  exists. Returns a full ref, so tags can't shadow it and resolving it again changes nothing. */
+export async function comparisonRef(
+  cwd: string,
+  branch: string,
+  options: GitTimeoutOptions = {},
+): Promise<string> {
+  if (branch.startsWith("refs/")) return branch;
+  for (const ref of [`refs/remotes/origin/${branch}`, `refs/heads/${branch}`]) {
+    const found = await runGit(["rev-parse", "-q", "--verify", `${ref}^{commit}`], { cwd, ...options, allowFailure: true });
+    if (found.exitCode === 0) return ref;
+  }
+  return branch;
+}
+
 export async function readMergeBaseRef(
   cwd: string,
   ref: string,
   options: GitTimeoutOptions = {},
 ): Promise<string | undefined> {
   await ensureGitRepo(cwd, options);
-  const result = await runGit(["merge-base", ref, "HEAD"], {
+  const base = await comparisonRef(cwd, ref, options);
+  const result = await runGit(["merge-base", base, "HEAD"], {
     cwd,
     ...options,
     allowFailure: true,

@@ -776,6 +776,16 @@ Local and Cloud threads retry failed naming automatically. Each model gets 30 se
 Retries wait 10 seconds, 30 seconds, 1 minute, 2 minutes, then 5 minutes between attempts.
 Pending names survive app restarts. Setting a name manually cancels automatic naming.
 
+### Thread purpose
+
+Hovering a thread's title shows its purpose: 1-2 sentences on its goal and current state, plus a percent done.
+It is written from the first message alongside the name, then rewritten after every reply. It never changes the title.
+Settings → Thread purpose turns it off (`threadPurpose.enabled`, on by default), picks the model
+(`threadPurpose.model`), and sets reasoning effort (`threadPurpose.reasoningEffort`, default medium).
+The default model is Haiku 5.5 on Claude Code, falling back to GPT-6 Luna on Codex. Codex-only users get GPT-6 Luna.
+With neither signed in on this Mac, no purposes are written.
+`room-cli thread show` prints it.
+
 ### Sidebar footer
 
 Settings → Appearance → Sidebar footer lets users reorder and hide built-in and

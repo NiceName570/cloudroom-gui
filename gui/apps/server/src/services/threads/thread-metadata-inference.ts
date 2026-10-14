@@ -23,6 +23,7 @@ import {
 import { runtimeErrorLogFields } from "../lib/error-log-fields.js";
 import { INFERENCE_POLICY } from "../ai/inference.js";
 import { noteGeneratedTitle } from "./title-recheck.js";
+import { noteFirstThreadMessage } from "./thread-purpose.js";
 import { syncGeneratedTitleToProvider } from "./thread-commands.js";
 
 const TITLE_RETRY_PREFIX = "threadTitleRetry:";
@@ -315,6 +316,7 @@ async function completeThreadMetadata(
       });
       if (titleApplied) {
         noteGeneratedTitle(args.threadId, outcome.metadata.title, args.input);
+        noteFirstThreadMessage(args.threadId, cleanPromptText(args.input));
       }
     } catch (error) {
       deps.logger.warn(

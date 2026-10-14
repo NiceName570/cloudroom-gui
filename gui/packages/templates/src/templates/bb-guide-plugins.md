@@ -182,7 +182,7 @@ snapshot.
 The builtin Secrets plugin provides a secure credential form and guarded
 dotenv reconciliation:
 
-  cloudroom secret request <NAME...> --write-env <path>
+  room-cli secret request <NAME...> --write-env <path>
                     [--purpose <text>] [--describe <NAME> <text>]...
 
 The command blocks until the user submits or cancels the form. Secret values

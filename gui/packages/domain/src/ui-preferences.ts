@@ -9,6 +9,9 @@ but keep terms like "PR" or "AGI" as they are... no need to rewrite that as "pul
 
 the name should contain unique things about that thread, like a specific name of a user, or feature name, or clear description of the bug -- so it's obvious how that thread is unique at a first glance`;
 
+export const THREAD_PURPOSE_CLAUDE_MODEL = "claude-code/claude-haiku-5-5";
+export const THREAD_PURPOSE_CODEX_MODEL = "codex/gpt-6-luna";
+
 const sidebarOrganizationModeSchema = z.enum([
   "project",
   "chronological",
@@ -71,6 +74,9 @@ export const UI_PREFERENCE_KEYS = [
   "threadNaming.fallbackModel",
   "threadNaming.rules",
   "threadNaming.renameSensitivity",
+  "threadPurpose.enabled",
+  "threadPurpose.model",
+  "threadPurpose.reasoningEffort",
 ] as const;
 export type UiPreferenceKey = (typeof UI_PREFERENCE_KEYS)[number];
 const uiPreferenceKeySchema = z.enum(UI_PREFERENCE_KEYS);
@@ -220,6 +226,21 @@ export const uiPreferenceDefinitions = {
     z.number().int().min(1).max(5),
     3,
     "How readily a vague generated title is renamed once after the first reply: 1 is off, 3 renames about 20% of threads, 5 about 45%.",
+  ),
+  "threadPurpose.enabled": defineUiPreference(
+    z.boolean(),
+    true,
+    "Keep a short purpose and percent done on each thread, refreshed after every reply. Shown when hovering the thread title.",
+  ),
+  "threadPurpose.model": defineUiPreference(
+    uiPreferenceStringSchema.nullable(),
+    null,
+    "Model that writes thread purposes, as provider/model; null uses Haiku 5.5 on Claude Code, then GPT-6 Luna on Codex, and skips purposes when neither is signed in.",
+  ),
+  "threadPurpose.reasoningEffort": defineUiPreference(
+    z.enum(["none", "low", "medium", "high"]),
+    "medium",
+    "Reasoning effort for the thread purpose model.",
   ),
 } as const satisfies Record<UiPreferenceKey, UiPreferenceDefinition>;
 

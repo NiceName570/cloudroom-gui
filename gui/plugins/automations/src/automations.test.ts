@@ -849,6 +849,51 @@ describe("automation data access", () => {
     ).toHaveLength(0);
   });
 
+  it("keeps automations of hidden projects and pauses those of deleted ones", async () => {
+    const db = createTestDb();
+    const automation = createScheduledAutomation(db, 1000);
+    let hiddenProjects = [{ id: "proj_test" }];
+    const notExpected = async () => {
+      throw new Error("not expected");
+    };
+    const bb = {
+      sdk: {
+        projects: {
+          list: async ({ hidden }: { hidden?: boolean }) =>
+            hidden ? hiddenProjects : [{ id: "proj_personal" }],
+        },
+        hosts: { list: async () => [] },
+        threads: { get: notExpected, send: notExpected, spawn: notExpected },
+      },
+      realtime: { publish: () => undefined },
+      log: {
+        debug: () => undefined,
+        error: () => undefined,
+        info: () => undefined,
+        warn: () => undefined,
+      },
+    };
+    const sweep = () =>
+      sweepDueAutomations(bb, db, {
+        pluginDataDir: "/tmp",
+        serverUrl: "http://127.0.0.1:38886",
+        now: 1000,
+      });
+
+    await sweep();
+    expect(getAutomation(db, automation.id)).toMatchObject({
+      enabled: true,
+      lastError: null,
+    });
+
+    hiddenProjects = [];
+    await sweep();
+    expect(getAutomation(db, automation.id)).toMatchObject({
+      enabled: false,
+      lastError: "Paused because its project was deleted",
+    });
+  });
+
   it("does not repeatedly select degraded agent executions for sweeping", () => {
     const db = createTestDb();
     const emptyPrompt = createScheduledAutomation(db, 1000, "auto_empty");

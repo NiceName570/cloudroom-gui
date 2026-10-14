@@ -8,6 +8,7 @@ import {
 } from "@cloudroom/host-daemon-contract";
 import type { Hono } from "hono";
 import type { AppDeps } from "../types.js";
+import { browserRequestProblem } from "../browser-request-guard.js";
 import { ApiError } from "../errors.js";
 import {
   getGateAuthKind,
@@ -62,6 +63,11 @@ export function registerInternalHostRoutes(app: Hono, deps: AppDeps): void {
         );
       }
       assertLoopbackRequest(getTrustedRemoteAddress(context));
+      // Loopback alone also admits a DNS-rebound browser page; check Host and Origin too.
+      const problem = browserRequestProblem(context, deps);
+      if (problem !== null) {
+        throw new ApiError(problem.status, "forbidden_origin", problem.error);
+      }
       const issued = await issueHostEnrollKey(deps, {
         enrollSource: "loopback",
         ...(payload.hostId ? { hostId: payload.hostId } : {}),

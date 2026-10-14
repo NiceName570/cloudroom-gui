@@ -2283,8 +2283,8 @@ one toast.
 **Kept experimental (2026-08-22).** one consumer (the codex plugin); the 5 MB plugin-served transcription cap (the old direct path allowed 25 MB) and the host-pull alternative are still open; the reserved-id model is now one static SDK list (`SERVER_DIRECT_AI_SERVICE_IDS`), pinned to pi-ai's provider registry by plugin-ai-services.test.ts.
 
 **What it does.** Lets a plugin serve bb's own AI services — server-side
-helper inference (thread titles, commit messages: prompt + JSON Schema in,
-structured value out) and voice transcription — from its `bb.host` entry.
+helper inference (thread titles, thread purposes, commit messages: prompt + JSON Schema in,
+structured value out; `reasoningEffort` is `none`, `low`, `medium`, or `high`, widened from `none` on 2026-10-13 for thread purposes) and voice transcription — from its `bb.host` entry.
 `bb.experimental_aiServices.register({ id, displayName, kinds })` stages the
 service during the factory and lands it when the load commits; the host entry
 implements `experimental_aiServicesHostContract` (`ai.inference.complete`,

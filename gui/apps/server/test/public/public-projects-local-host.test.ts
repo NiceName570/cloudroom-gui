@@ -118,7 +118,7 @@ describe("public project local host routes", () => {
     });
   });
 
-  it("hides a project without deleting its threads, and adding its folder again shows it", async () => {
+  it("hides a project without touching its threads, and adding its folder again shows it", async () => {
     await withTestHarness(async (harness) => {
       const host = seedHost(harness.deps, { id: "host-hidden-project" });
       seedPrimaryHost(harness.deps, host.id);
@@ -152,9 +152,14 @@ describe("public project local host routes", () => {
         expect.objectContaining({ id: project.id }),
       ]);
       expect(getThread(harness.db, thread.id)).toMatchObject({
-        archivedAt: expect.any(Number),
+        archivedAt: null,
         deletedAt: null,
       });
+      seedThread(harness.deps, {
+        projectId: project.id,
+        originPluginId: "bb-plugin-automations",
+      });
+      expect(await visibleIds()).not.toContain(project.id);
 
       const readd = await harness.app.request("/api/v1/projects", {
         method: "POST",
@@ -172,9 +177,6 @@ describe("public project local host routes", () => {
         project.id,
       );
       expect(await visibleIds()).toContain(project.id);
-      expect(getThread(harness.db, thread.id)?.archivedAt).toEqual(
-        expect.any(Number),
-      );
     });
   });
 

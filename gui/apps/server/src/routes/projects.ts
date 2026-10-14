@@ -47,7 +47,6 @@ import {
 } from "../services/lib/entity-lookup.js";
 import { PROMPT_HISTORY_ENTRY_LIMIT } from "@cloudroom/domain";
 import { toThreadListEntryResponses } from "../services/threads/thread-runtime-display.js";
-import { archiveProjectThreads } from "../services/threads/thread-archive.js";
 import { callHostRetryableOnlineRpc } from "../services/hosts/online-rpc.js";
 import {
   cloneProjectSourceOnHost,
@@ -65,6 +64,7 @@ import {
 } from "../services/skills/skill-listing.js";
 import {
   createDaemonFileContentResponse,
+  setUntrustedFileHeaders,
   serveDaemonFileContent,
   requestMatchesEntityTag,
 } from "../services/hosts/daemon-file-response.js";
@@ -399,9 +399,6 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
   patch(routes.update, async (context, payload) => {
     const projectId = context.req.param("id");
     requirePublicStandardProject(deps.db, projectId);
-    if (payload.hidden === true) {
-      archiveProjectThreads(deps, projectId);
-    }
     if (payload.hidden !== undefined) {
       setProjectHidden(deps.db, deps.hub, projectId, payload.hidden);
     }
@@ -870,11 +867,13 @@ export function registerProjectRoutes(app: Hono, deps: AppDeps): void {
       context.req.param("id"),
       query.path,
     );
-    const headers = new Headers({
-      "cache-control": ATTACHMENT_CONTENT_CACHE_CONTROL,
-      "content-type": attachment.mimeType ?? "application/octet-stream",
-      etag: attachment.etag,
-    });
+    const headers = setUntrustedFileHeaders(
+      new Headers({
+        "cache-control": ATTACHMENT_CONTENT_CACHE_CONTROL,
+        "content-type": attachment.mimeType ?? "application/octet-stream",
+        etag: attachment.etag,
+      }),
+    );
     if (
       requestMatchesEntityTag(
         context.req.header("if-none-match"),

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { nanoid } from "nanoid";
+import { useMediaQuery } from "@cloudroom/shared-ui/hooks/use-media-query";
 import { useSystemProviderInfo } from "@/hooks/queries/system-queries";
 import { useCloudroomConnection, cloudFeatureSupported, useOpenCloudFile, useCloudroomThread, useCloudroomThreadWorkspace } from "@/hooks/queries/cloudroom-queries";
 import { useNavigate } from "react-router-dom";
@@ -1039,6 +1040,9 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
       state: { focusPrompt: true, initialPrompt: REPORT_BUG_PROMPT, replaceInitialPrompt: true },
     });
   }, [navigate, selectionPromptDraft]);
+  // Mobile PWA header is tight; show only the bug icon so the title keeps its room.
+  const isStandaloneApp = useMediaQuery("(display-mode: standalone)");
+  const showReportBugIconOnly = renderSecondaryPanelAsDrawer && isStandaloneApp;
   const [sentMessageEditSession, setSentMessageEditSession] =
     useState<SentMessageEditSession | null>(null);
   const [sentMessageEditHostElement, setSentMessageEditHostElement] =
@@ -2600,14 +2604,16 @@ function ThreadDetailViewInternal(props: ThreadRoutePathArgs) {
             size="sm"
             className="h-7 gap-1.5 px-2 text-xs text-muted-foreground opacity-35 transition-[color,background-color,opacity] hover:text-foreground hover:opacity-100 focus-visible:opacity-100"
             onClick={reportBug}
+            aria-label={showReportBugIconOnly ? "Report a bug" : undefined}
           >
             <Icon name="Bug" className="size-3.5" />
-            Report a bug
+            {showReportBugIconOnly ? null : "Report a bug"}
           </Button>
           <ThreadShareButton threadId={thread.id} />
         </>
       }
       threadId={thread.id}
+      threadPurpose={thread.purpose ?? null}
       threadTitle={threadTitle}
     />
   );

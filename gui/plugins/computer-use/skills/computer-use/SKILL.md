@@ -9,7 +9,7 @@ Cloudroom drives desktop apps through a pinned [Cua Driver](https://github.com/t
 It reads each app's accessibility tree (buttons, fields, labels), acts in the
 background with its own agent cursor, and leaves the user's cursor and focus alone.
 
-In Cloud threads, use `cloudroom computer-use` instead; that skill is `cloud-computer-use`.
+In Cloud threads, use `room-cli computer-use` instead; that skill is `cloud-computer-use`.
 
 ## When to use it
 

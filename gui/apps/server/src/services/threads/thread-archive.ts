@@ -7,8 +7,6 @@ import {
   sweepProviderMachine,
 } from "../machines/provider-orchestration.js";
 import {
-  getThread,
-  listLiveThreadIdsInProject,
   listLiveThreadsInEnvironment,
   listNonDeletedChildThreads,
   listUnarchivedHiddenSourceThreads,
@@ -225,19 +223,4 @@ export function archiveThreadAndChildren(
   }
 
   return archivedThreadIds;
-}
-
-export function archiveProjectThreads(deps: AppDeps, projectId: string): void {
-  for (const threadId of listLiveThreadIdsInProject(deps.db, projectId)) {
-    const thread = getThread(deps.db, threadId);
-    if (!thread || thread.archivedAt || thread.deletedAt) continue;
-    try {
-      archiveThreadAndChildren(deps, { parentThread: thread });
-    } catch (error) {
-      deps.logger.warn(
-        { error, threadId },
-        "Could not archive a thread of a removed project",
-      );
-    }
-  }
 }

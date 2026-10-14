@@ -34,6 +34,7 @@ import { createProviderRegistryService } from "./services/providers/provider-reg
 import { installFirstResponseTelemetry } from "./services/system/first-response-telemetry.js";
 import { startSetupTelemetry } from "./services/cloudroom/setup-telemetry.js";
 import { installTitleRecheck } from "./services/threads/title-recheck.js";
+import { installThreadPurpose } from "./services/threads/thread-purpose.js";
 import { installAuthFailureTelemetry } from "./services/system/auth-failure-telemetry.js";
 import { createTelemetryService } from "./services/system/telemetry.js";
 import { TerminalSessionLifecycle } from "./services/terminals/terminal-session-lifecycle.js";
@@ -236,6 +237,7 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
   const providerModelCatalogPrewarm =
     installProviderModelCatalogPrewarm(sweepDeps);
   const stopTitleRecheck = installTitleRecheck(sweepDeps, cloud.sandboxes);
+  const stopThreadPurpose = installThreadPurpose(sweepDeps);
   await runStartupRecoverySweep(sweepDeps).catch((error) => {
     logger.error({ err: error }, "Startup recovery sweep failed");
   });
@@ -310,6 +312,7 @@ export async function runServer(serverConfig: ServerConfig): Promise<void> {
       stopFirstResponseTelemetry();
       stopAuthFailureTelemetry();
       stopTitleRecheck();
+      stopThreadPurpose();
       clearInterval(sweepInterval);
       clearTimeout(providerAutoUpdateFirstRun);
       clearInterval(providerAutoUpdateInterval);

@@ -95,6 +95,22 @@ export function resolveSpawnEnvironmentValue(
   });
 }
 
+// Agents copy the short Claude ID from their system prompt (claude-opus-5-5),
+// which silently picks the 200K model. Keep the caller's exact 1M variant.
+async function preferCallerModel(
+  sdk: ReturnType<typeof createCliBbSdk>,
+  model: string,
+): Promise<string> {
+  const threadId = resolveContextThreadId();
+  if (!threadId) return model;
+  try {
+    const own = await sdk.threads.defaultExecutionOptions({ threadId });
+    return own?.model === `${model}[1m]` ? own.model : model;
+  } catch {
+    return model;
+  }
+}
+
 function resolveSpawnParentThreadId(args: {
   parentSelf?: boolean;
   parentThread?: string;
@@ -551,6 +567,7 @@ export function registerSpawnCommand(
         let thread: Thread;
         try {
           const sdk = createCliBbSdk(getUrl());
+          const model = opts.model && (await preferCallerModel(sdk, opts.model));
           const input = await uploadClientAttachmentInputs({
             input: buildPromptInputs({
               message: opts.prompt,
@@ -566,7 +583,7 @@ export function registerSpawnCommand(
             origin: "cli",
             projectId,
             ...(providerId ? { providerId } : {}),
-            ...(opts.model ? { model: opts.model } : {}),
+            ...(model ? { model } : {}),
             input,
             ...(reasoningLevel ? { reasoningLevel } : {}),
             ...(opts.title ? { title: opts.title } : {}),

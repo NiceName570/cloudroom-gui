@@ -22,7 +22,7 @@ export const cloudForkSchema = z.object({
 export type CloudFork = z.infer<typeof cloudForkSchema>;
 
 export const FORK_HARNESSES: readonly string[] = ["claude-code", "codex"];
-export const FORK_HINT = "[Cloud fork]\nThis conversation was forked from another Cloud thread and now runs in its own new sandbox. Cloudroom is copying that thread's code (its commits and uncommitted changes) into this folder. Run `cloudroom files wait` before you read or change files; it returns once the code lands. Never recreate missing files.";
+export const FORK_HINT = "[Cloud fork]\nThis conversation was forked from another Cloud thread and now runs in its own new sandbox. Cloudroom is copying that thread's code (its commits and uncommitted changes) into this folder. Run `room-cli files wait` before you read or change files; it returns once the code lands. Never recreate missing files.";
 // Core takes teleport uploads in 1 MB parts.
 const PART = 1024 * 1024;
 const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
@@ -94,7 +94,7 @@ export async function startCloudFork(
   return { sessionId, transfer, code };
 }
 
-export const CHILD_HINT = "[Cloud child]\nYou run in your own sandbox. Cloudroom is copying your parent thread's code (its commits and uncommitted changes) into this folder. Run `cloudroom files wait` before you read or change files; it returns once the code lands. Never recreate missing files.";
+export const CHILD_HINT = "[Cloud child]\nYou run in your own sandbox. Cloudroom is copying your parent thread's code (its commits and uncommitted changes) into this folder. Run `room-cli files wait` before you read or change files; it returns once the code lands. Never recreate missing files.";
 
 /** A Cloud parent's code (its branch plus uncommitted changes) for a child in a sandbox of its own (ADR 0229),
  *  applied with `landForkCode` like a fork's. Null when the parent's folder has no Git history. */

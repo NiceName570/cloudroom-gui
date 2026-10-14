@@ -558,6 +558,9 @@ function printThreadStatus(
   if (thread.title) {
     console.log(`  Title: ${thread.title}`);
   }
+  if (thread.purpose) {
+    console.log(`  Purpose: ${thread.purpose.text} (${thread.purpose.percent}% done)`);
+  }
   console.log(`  Project: ${thread.projectId}`);
   if (execution) {
     console.log(`  Model: ${execution.model} (effort: ${execution.reasoningLevel})`);

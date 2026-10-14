@@ -35,6 +35,7 @@ import {
   type BbDesktopInfo,
   type BbDesktopWindowState,
 } from "@cloudroom/desktop-contract";
+import { installSocketTypeOfServiceGuard } from "@cloudroom/process-utils/socket-type-of-service";
 import {
   serverMessageLenientSchema,
   type ClientMessage,
@@ -237,6 +238,8 @@ import {
   type RuntimeOwnership,
   type WindowStateKey,
 } from "./types.js";
+
+installSocketTypeOfServiceGuard();
 
 const OWNED_RUNTIME_STOP_TIMEOUT_MS = 6_000;
 const OWNED_RUNTIME_KILL_TIMEOUT_MS = 1_000;

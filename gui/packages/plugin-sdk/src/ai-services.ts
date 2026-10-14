@@ -53,8 +53,8 @@ export const experimental_aiInferenceCompleteInputSchema = z
     serviceId: z.string().min(1),
     /** The model segment of the user's `<serviceId>/<model>` setting. */
     model: z.string().min(1),
-    /** Helper inference is short and latency-bound; no reasoning. */
-    reasoningEffort: z.literal("none"),
+    /** Thread titles use "none"; thread purposes use the user's setting. */
+    reasoningEffort: z.enum(["none", "low", "medium", "high"]),
     prompt: z.string().min(1),
     /** A JSON Schema object the structured result must satisfy. */
     outputSchema: jsonObjectSchema,

@@ -10,6 +10,7 @@ import { callHostRetryableOnlineRpc } from "./online-rpc.js";
 
 const OCTET_STREAM_MIME_TYPE = "application/octet-stream";
 const REVALIDATE_CACHE_CONTROL = "private, no-cache";
+const UNTRUSTED_FILE_CSP = "sandbox allow-scripts";
 
 type HostReadFileResult = HostDaemonOnlineRpcResultByType["host.read_file"];
 export type DaemonFileReadResult =
@@ -96,6 +97,24 @@ export function requireDaemonFileContentResult(
   return result;
 }
 
+// Repo, agent, and attachment files are untrusted: never let them run as the app's origin.
+// PDFs stay unsandboxed so built-in PDF viewers keep working; nosniff stops them posing as HTML.
+export function setUntrustedFileHeaders(headers: Headers): Headers {
+  const mimeType = headers
+    .get("content-type")
+    ?.split(";")[0]
+    ?.trim()
+    .toLowerCase();
+  if (
+    !headers.has("content-security-policy") &&
+    mimeType !== "application/pdf"
+  ) {
+    headers.set("content-security-policy", UNTRUSTED_FILE_CSP);
+  }
+  headers.set("x-content-type-options", "nosniff");
+  return headers;
+}
+
 function buildFileContentHeaders(
   result: DaemonFileReadResult,
   options: CreateDaemonFileContentResponseOptions,
@@ -111,7 +130,7 @@ function buildFileContentHeaders(
   if (result.modifiedAtMs !== undefined) {
     headers.set("last-modified", new Date(result.modifiedAtMs).toUTCString());
   }
-  return headers;
+  return setUntrustedFileHeaders(headers);
 }
 
 function decodeDaemonFileContent(result: DaemonFileReadResult): ArrayBuffer {

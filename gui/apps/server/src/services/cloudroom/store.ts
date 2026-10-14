@@ -1,6 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { cloudroomCommands, cloudroomThreads, threads, threadPluginMetadata, type DbQueryConnection } from "@cloudroom/db";
-import type { ProjectCopyProgress } from "@cloudroom/domain";
+import type { ProjectCopyProgress, TeleportLocalStep } from "@cloudroom/domain";
 import { emitPluginThreadStatusEntered } from "../plugins/plugin-thread-events.js";
 
 export type TeleportProgress = {
@@ -13,6 +13,7 @@ export function teleportProgress(db: DbQueryConnection, threadId: string): Telep
     .where(and(eq(threadPluginMetadata.threadId, threadId), eq(threadPluginMetadata.pluginId, teleportNamespace))).get();
   return row ? JSON.parse(row.value) as TeleportProgress : null;
 }
+export const localTeleports = new Map<string, TeleportLocalStep>();
 export function teleportBlocked(db: DbQueryConnection, threadId: string): boolean {
   const progress = teleportProgress(db, threadId);
   return Boolean(progress && !["checking", "complete", "cancelled"].includes(progress.phase));

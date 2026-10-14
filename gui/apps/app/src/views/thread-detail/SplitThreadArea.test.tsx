@@ -2171,7 +2171,6 @@ describe("SplitThreadArea", () => {
       name: "Breadcrumb",
     });
     expect(breadcrumb.textContent).toContain("Automations");
-    expect(breadcrumb.textContent).toContain("Installed");
     expect(breadcrumb.textContent).toContain("weekly-review");
 
     store.set(resourceRouteLabelAtom, "Weekly review");
@@ -2179,7 +2178,7 @@ describe("SplitThreadArea", () => {
       expect(breadcrumb.textContent).toContain("Weekly review"),
     );
 
-    fireEvent.click(screen.getByRole("link", { name: "Installed" }));
+    fireEvent.click(screen.getByRole("link", { name: "Automations" }));
     expect(screen.getByTestId("location").textContent).toBe(
       "/plugins/automations/automations",
     );

@@ -169,6 +169,7 @@ function toPublicThread(thread: Thread): Thread {
     providerId: thread.providerId,
     title: thread.title,
     titleFallback: thread.titleFallback,
+    ...(thread.purpose ? { purpose: thread.purpose } : {}),
     sectionId: thread.sectionId,
     status: thread.status,
     parentThreadId: thread.parentThreadId,
@@ -343,7 +344,7 @@ function toThreadResponseWithHost(
   };
 }
 
-import { projectCopyProgress, queuedPrompts as cloudQueuedPrompts, teleportProgress } from "../cloudroom/store.js";
+import { localTeleports, projectCopyProgress, queuedPrompts as cloudQueuedPrompts, teleportProgress } from "../cloudroom/store.js";
 
 export function toThreadResponseFromThread(
   deps: ThreadRuntimeDisplayDeps,
@@ -356,6 +357,7 @@ export function toThreadResponseFromThread(
   return {
     ...threadWithRuntime,
     ...(teleportProgress(deps.db, args.thread.id) ? { teleport: teleportProgress(deps.db, args.thread.id)! } : {}),
+    ...(localTeleports.has(args.thread.id) ? { teleportLocalStep: localTeleports.get(args.thread.id)! } : {}),
     ...(projectCopyProgress(deps.db, args.thread.id) ? { projectCopy: projectCopyProgress(deps.db, args.thread.id)! } : {}),
     activeBackgroundAgentCount:
       listActiveBackgroundTaskCountsByThreadIds(deps.db, {

@@ -37,6 +37,10 @@ export interface CloudroomStatus {
   localLogins?: { codex: boolean };
   signingIn: boolean;
   signInError: string | null;
+  /** The account's place in the cloud queue, or a blocked region: new Cloud threads wait. Null when it may start them. */
+  cloudQueue?: { position: number; total: number; regionBlocked: boolean } | null;
+  /** Free Cloud needs a GitHub sign-in at least 30 days old. */
+  githubRequired?: boolean;
 }
 
 export interface CloudroomCodexAuth {

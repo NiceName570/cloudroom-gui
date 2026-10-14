@@ -223,6 +223,7 @@ function createThreadListEntry(
   return {
     ...args.thread,
     executionTarget: args.thread.executionTarget ?? "local",
+    purpose: args.thread.purpose ?? null,
     modelOverride: null,
     reasoningLevelOverride: null,
     storageDeletedAt: null,

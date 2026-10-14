@@ -81,7 +81,10 @@ import { PluginSettingsPage } from "@/components/plugin/PluginSettings";
 import { PluginSettingsSections } from "@/components/plugin/PluginSettingsSections";
 import { FileOpenersSettingsSection } from "@/components/settings/FileOpenersSettingsSection";
 import { VoiceInputSettingsSection } from "@/components/settings/VoiceInputSettingsSection";
-import { ThreadNamingSettingsSection } from "@/components/settings/ThreadNamingSettingsSection";
+import {
+  ThreadNamingSettingsSection,
+  ThreadPurposeSettingsSection,
+} from "@/components/settings/ThreadNamingSettingsSection";
 import { CommunitySettingsSection } from "@/components/settings/CommunitySettingsSection";
 import { UpdatesSettingsSection } from "@/components/settings/UpdatesSettingsSection";
 import { KeyboardSettingsSection } from "@/components/settings/KeyboardSettingsSection";
@@ -1503,6 +1506,7 @@ export function SettingsView() {
         />
         <CliSkillsSettingsSection />
         <ThreadNamingSettingsSection />
+        <ThreadPurposeSettingsSection />
         <VoiceInputSettingsSection />
         <PrivacySettingsSection
           telemetryEnabled={generalSettings.telemetryEnabled}

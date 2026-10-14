@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { loadServerConfig } from "@cloudroom/config/server";
 import {
   installSafeProcessDiagnostics,
+  installSocketTypeOfServiceGuard,
   writeSafeProcessDiagnosticReport,
 } from "@cloudroom/process-utils";
 
@@ -12,6 +13,7 @@ installSafeProcessDiagnostics({
   logsDir: diagnosticsLogsDir,
   processName: "server",
 });
+installSocketTypeOfServiceGuard();
 
 function reportStartupFailure(error: unknown): void {
   try {

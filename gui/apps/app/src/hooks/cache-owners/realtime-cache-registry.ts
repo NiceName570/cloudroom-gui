@@ -381,6 +381,10 @@ export const REALTIME_THREAD_CHANGE_REGISTRY = {
     flush: "debounced",
     dirty: [dirtyActiveThreadListQueries, dirtyThreadDetailQueries],
   },
+  "purpose-changed": {
+    flush: "debounced",
+    dirty: [dirtyThreadDetailQueries],
+  },
   "queue-changed": {
     flush: "debounced",
     dirty: [

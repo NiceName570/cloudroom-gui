@@ -28,6 +28,7 @@ import type {
   ServiceTier,
   TerminalSessionCloseReason,
   TerminalSessionStatus,
+  ThreadPurpose,
   ThreadDynamicContextFileStatus,
   ThreadSearchSourceKind,
   ThreadEventItemType,
@@ -563,6 +564,7 @@ export const threads = sqliteTable(
     ).$type<ReasoningLevel>(),
     title: text("title"),
     titleFallback: text("title_fallback"),
+    purpose: text("purpose", { mode: "json" }).$type<ThreadPurpose>(),
     sectionId: text("section_id").references(() => threadSections.id, {
       onDelete: "set null",
     }),

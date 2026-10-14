@@ -11,7 +11,6 @@ import { AppLayout } from "./components/layout/AppLayout";
 import { CloudroomAccountPanels } from "./components/CloudroomAccountPanels";
 import { Onboarding } from "./components/Onboarding";
 import { InviteOffer } from "./components/InviteOffer";
-import { OnboardingCallNudge } from "./components/OnboardingCallNudge";
 import { SharedThreadOpener } from "./components/SharedThreadOpener";
 import { InstallAppSheet } from "./components/InstallAppSheet";
 import { AuthCallbackView } from "./views/AuthCallbackView";
@@ -450,7 +449,6 @@ export function App() {
               <ProviderCliInstallLogDialogHost />
               <Onboarding />
               <InviteOffer />
-              <OnboardingCallNudge />
               <SharedThreadOpener />
               <InstallAppSheet />
               <CloudroomAccountPanels />

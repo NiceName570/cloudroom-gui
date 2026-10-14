@@ -168,7 +168,6 @@ export function installCloudroomRoutes(app: Hono, deps: AppDeps): void {
     const input = z.object({ message: z.string().trim().min(1).max(4000), threadId: z.string().min(1).max(200).optional() }).strict().parse(await context.req.json());
     return context.json(await reportBug(deps, input));
   });
-  app.get("/api/v1/cloudroom/account/onboarding-call", async (context) => context.json(await cloudroom(deps).sandboxes.onboardingCall()));
   app.get("/api/v1/cloudroom/account/invites", async (context) => context.json(await cloudroom(deps).sandboxes.invites("list")));
   app.post("/api/v1/cloudroom/account/invites", async (context) => {
     z.object({}).strict().parse(await context.req.json());

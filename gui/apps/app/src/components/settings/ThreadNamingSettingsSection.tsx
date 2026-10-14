@@ -1,15 +1,22 @@
 import { useEffect, useState } from "react";
 import { useAtom } from "jotai";
 import { Slider } from "@cloudroom/shared-ui/slider";
+import { Switch } from "@cloudroom/shared-ui/switch";
 import { Textarea } from "@cloudroom/shared-ui/textarea";
-import { DEFAULT_THREAD_NAMING_RULES } from "@cloudroom/domain";
+import {
+  DEFAULT_THREAD_NAMING_RULES,
+  THREAD_PURPOSE_CLAUDE_MODEL,
+} from "@cloudroom/domain";
 import {
   SettingsSection,
   SettingsWithControl,
 } from "@/components/ui/settings-section";
 import { useSystemConfig } from "@/hooks/queries/system-queries";
 import { createSyncedPreferenceAtom } from "@/lib/ui-preferences/synced-preference-atom";
-import { ThreadNamingModelPicker } from "./ThreadNamingModelPicker";
+import {
+  SettingsDropdown,
+  ThreadNamingModelPicker,
+} from "./ThreadNamingModelPicker";
 
 const threadNamingModelAtom = createSyncedPreferenceAtom("threadNaming.model");
 const threadNamingFallbackModelAtom = createSyncedPreferenceAtom(
@@ -19,6 +26,19 @@ const threadNamingRulesAtom = createSyncedPreferenceAtom("threadNaming.rules");
 const renameSensitivityAtom = createSyncedPreferenceAtom(
   "threadNaming.renameSensitivity",
 );
+const threadPurposeEnabledAtom = createSyncedPreferenceAtom(
+  "threadPurpose.enabled",
+);
+const threadPurposeModelAtom = createSyncedPreferenceAtom("threadPurpose.model");
+const threadPurposeEffortAtom = createSyncedPreferenceAtom(
+  "threadPurpose.reasoningEffort",
+);
+const PURPOSE_EFFORT_OPTIONS = [
+  { value: "none", label: "None" },
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+] as const;
 const RENAME_SENSITIVITY_LABELS = [
   "Off",
   "Rarely",
@@ -101,6 +121,61 @@ export function ThreadNamingSettingsSection() {
             </span>
           </div>
         </SettingsWithControl>
+      </div>
+    </SettingsSection>
+  );
+}
+
+export function ThreadPurposeSettingsSection() {
+  const [enabled, setEnabled] = useAtom(threadPurposeEnabledAtom);
+  const [model, setModel] = useAtom(threadPurposeModelAtom);
+  const [effort, setEffort] = useAtom(threadPurposeEffortAtom);
+
+  return (
+    <SettingsSection
+      title="Thread purpose"
+      description="Hover a thread's title to see what it is for and how far along it is. Updated after every reply. Off when neither Claude Code nor Codex is signed in."
+    >
+      <div className="space-y-4">
+        <SettingsWithControl
+          label="Thread purpose"
+          description="Uses a small model call after each reply."
+        >
+          <Switch
+            aria-label="Thread purpose"
+            checked={enabled}
+            onCheckedChange={setEnabled}
+          />
+        </SettingsWithControl>
+        {enabled ? (
+          <>
+            <ThreadNamingModelPicker
+              harnessDescription="Default: Haiku 5.5 on Claude Code, or GPT-6 Luna on Codex without Claude."
+              scope="Thread purpose"
+              value={model}
+              defaultValue={THREAD_PURPOSE_CLAUDE_MODEL}
+              defaultLabel="Haiku 5.5, or GPT-6 Luna"
+              onChange={setModel}
+            />
+            <SettingsWithControl label="Reasoning effort">
+              <SettingsDropdown
+                label="Thread purpose reasoning effort"
+                options={[...PURPOSE_EFFORT_OPTIONS]}
+                selected={effort}
+                triggerLabel={
+                  PURPOSE_EFFORT_OPTIONS.find((option) => option.value === effort)
+                    ?.label ?? effort
+                }
+                onSelect={(value) => {
+                  const next = PURPOSE_EFFORT_OPTIONS.find(
+                    (option) => option.value === value,
+                  );
+                  if (next) setEffort(next.value);
+                }}
+              />
+            </SettingsWithControl>
+          </>
+        ) : null}
       </div>
     </SettingsSection>
   );

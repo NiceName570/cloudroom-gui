@@ -459,8 +459,7 @@ function mapExecutionTitle(row: TimelineExecutionWorkRow): TimelineTitle {
     return explorationTitle;
   }
   const badges = badgeDecorations(row);
-  // Cloud agents reach the user's Mac through `cloudroom mac` (ADR 0113).
-  const onMac = isCommand && /\bcloudroom mac (run|pull|push)\b/.test(content);
+  const onMac = isCommand && /\b(room-cli|cloudroom) mac (run|pull|push)\b/.test(content);
   const ran = isCommand ? (onMac ? "Ran on your Mac:" : "Ran") : "Ran tool";
   switch (status) {
     case "waiting":

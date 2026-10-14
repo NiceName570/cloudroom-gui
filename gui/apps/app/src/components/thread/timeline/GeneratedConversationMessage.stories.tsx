@@ -158,7 +158,7 @@ const SYSTEM_ROWS: readonly SystemRowFixture[] = [
       threadId: "thr_child5",
       threadName: "Clean up old docs",
     },
-    text: "[Cloudroom] Child thread \"Clean up old docs\" (cr_child_9f2a) failed or its outcome is uncertain. Cause: process exited with signal 9. Signal 9 usually means the sandbox ran out of memory. Its turn did not finish; resend the task if it still matters. Check it with `cloudroom thread output cr_child_9f2a` before deciding next steps.",
+    text: "[Cloudroom] Child thread \"Clean up old docs\" (cr_child_9f2a) failed or its outcome is uncertain. Cause: process exited with signal 9. Signal 9 usually means the sandbox ran out of memory. Its turn did not finish; resend the task if it still matters. Check it with `room-cli thread output cr_child_9f2a` before deciding next steps.",
   },
   {
     label: "Cloud child-interrupted",

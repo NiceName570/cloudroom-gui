@@ -296,7 +296,7 @@ export default async function computerUsePlugin(bb: BbPluginApi) {
     if (!threadId) return fail("no_thread", "Run this from a Cloudroom thread (ROOM_THREAD_ID is not set).");
     const { hostId, provider } = await threadInfo(threadId);
     if (!hostId)
-      return fail("no_host", "This thread has no local machine. In Cloud threads use `cloudroom computer-use` instead.");
+      return fail("no_host", "This thread has no local machine. In Cloud threads use `room-cli computer-use` instead.");
     switch (argv[0]) {
       case "status": {
         const current = await settings(hostId);

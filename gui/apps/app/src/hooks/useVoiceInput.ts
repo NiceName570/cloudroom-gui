@@ -43,6 +43,9 @@ const RECORDING_BITS_PER_SECOND = 64_000;
 
 const HTML_DOCUMENT_PATTERN = /<!doctype html|<html[\s>]/i;
 
+const offeredRecordingIds = new Set<number>();
+const recordingToastId = (id: number) => `voice-recording-backup-${id}`;
+
 function normalizeTranscript(rawText: string): string {
   return rawText.replace(/\s+/g, " ").trim();
 }
@@ -122,6 +125,7 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
   const promptContextRef = useRef<string | undefined>(undefined);
   const shouldTranscribeRef = useRef(true);
   const transcriptionAbortRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
   const wakeLockSentinelRef = useRef<WakeLockSentinel | null>(null);
   const wakeLockRequestRef = useRef<Promise<void> | null>(null);
   const shouldHoldWakeLockRef = useRef(false);
@@ -132,15 +136,22 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
     useState<VoiceUnsupportedReason | null>("unsupported-browser");
   const [stream, setStream] = useState<MediaStream | null>(null);
 
-  const showError = useCallback((message: string, retry?: () => void) => {
-    setState("error");
-    appToast.error("Voice input failed", {
-      description: message,
-      ...(retry
-        ? { action: { label: "Retry", onClick: retry }, duration: Infinity }
-        : {}),
-    });
-  }, []);
+  const showError = useCallback(
+    (message: string, retry?: { recordingId: number; run: () => void }) => {
+      setState("error");
+      appToast.error("Voice input failed", {
+        description: message,
+        ...(retry
+          ? {
+              id: recordingToastId(retry.recordingId),
+              action: { label: "Retry", onClick: retry.run },
+              duration: Infinity,
+            }
+          : {}),
+      });
+    },
+    [],
+  );
 
   const transcribe = useCallback(
     async function transcribeRecording(
@@ -164,6 +175,10 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
         if (normalized.length === 0) {
           throw new Error("Voice transcription returned an empty result.");
         }
+        if (!mountedRef.current) {
+          offeredRecordingIds.delete(recordingId);
+          return;
+        }
         options.onTranscript(normalized);
         void deleteVoiceRecording(recordingId);
         setState("idle");
@@ -172,8 +187,10 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
           setState("idle");
           return;
         }
-        showError(resolveRecordingErrorMessage(error), () => {
-          void transcribeRecording(recordingId, file, promptContext);
+        offeredRecordingIds.add(recordingId);
+        showError(resolveRecordingErrorMessage(error), {
+          recordingId,
+          run: () => void transcribeRecording(recordingId, file, promptContext),
         });
       } finally {
         releaseVoiceRecording(recordingId);
@@ -190,8 +207,11 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
   useEffect(() => {
     void loadVoiceRecordings().then((saved) => {
       for (const { id, file } of saved) {
+        const toastId = recordingToastId(id);
+        if (offeredRecordingIds.has(id) && !appToast.isOpen(toastId)) continue;
+        offeredRecordingIds.add(id);
         appToast.warning("Unsent voice recording", {
-          id: `voice-recording-backup-${id}`,
+          id: toastId,
           description:
             id > 0
               ? `Recorded ${new Date(id).toLocaleString()}, never transcribed.`
@@ -286,7 +306,9 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       const recorder = mediaRecorderRef.current;
       if (recorder && recorder.state === "recording") {
         try {
@@ -366,6 +388,10 @@ export function useVoiceInput(options: UseVoiceInputOptions) {
       recorder.onstop = async () => {
         releaseRecordingWakeLock();
         stopMediaStream();
+        if (!mountedRef.current) {
+          releaseVoiceRecording(id);
+          return;
+        }
         const discardRecording = () => {
           void deleteVoiceRecording(id);
           releaseVoiceRecording(id);

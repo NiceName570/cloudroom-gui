@@ -22,7 +22,9 @@ Before your first browser task, read the full guide: `browser-harness skill`. It
 - **Local threads:** the user's own browser, with their logins. Cloudroom uses their default browser when it is Chromium-based (Chrome, Brave, Edge, Arc, Dia, Comet). Safari and Firefox can't be driven; say so if the user asks.
   - Work in your own tabs. Never close or reuse the user's tabs.
   - First use may need the user once: tick "Allow remote debugging for this browser instance" at `chrome://inspect/#remote-debugging`, then click Allow on the browser's popup. Tell them exactly that.
-- **Cloud threads:** Chromium on the sandbox's virtual screen, with no logins. `cloudroom computer-use` sees the same window, so use it for native dialogs and browser menus.
+- **Cloud threads:** Chromium on the sandbox's virtual screen, with no logins. `room-cli computer-use` sees the same window, so use it for native dialogs and browser menus.
+  - The side-panel browser runs on the user's Mac. You can't use it or its logins.
+  - If a site needs the user's login, say so. Ask before using their Mac's browser.
 
 ## Rules
 

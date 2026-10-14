@@ -123,12 +123,14 @@ function ResourceMenuTrigger({
   active = false,
   open = false,
   tooltip = label,
+  quiet = false,
 }: {
   label: string;
   icon: IconName;
   active?: boolean;
   open?: boolean;
   tooltip?: ReactNode;
+  quiet?: boolean;
 }) {
   return (
     <TooltipProvider delayDuration={250}>
@@ -141,7 +143,9 @@ function ResourceMenuTrigger({
               size="icon"
               className={cn(
                 "size-8 shrink-0 rounded-md p-0 text-muted-foreground",
-                RESOURCE_MENU_TRIGGER_RESTING_CLASS,
+                quiet
+                  ? "border-0 bg-transparent hover:text-foreground"
+                  : RESOURCE_MENU_TRIGGER_RESTING_CLASS,
                 (open || active) && RESOURCE_MENU_TRIGGER_ENGAGED_CLASS,
               )}
               aria-label={label}
@@ -254,9 +258,11 @@ export interface ResourceFilterGroup {
 export function ResourceFilterMenu({
   groups,
   compact = false,
+  quiet = false,
 }: {
   groups: readonly ResourceFilterGroup[];
   compact?: boolean;
+  quiet?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const renderedGroups = groups
@@ -287,6 +293,7 @@ export function ResourceFilterMenu({
         active={hasActiveFilter}
         open={open}
         tooltip={hasActiveFilter ? activeSummaries.join("; ") : "Filters: All"}
+        quiet={quiet}
       />
       <DropdownMenuContent
         align="end"
@@ -342,6 +349,7 @@ export function ResourceSortMenu({
   onClear,
   placeholderLabel = "Sort",
   compact = false,
+  quiet = false,
 }: {
   value: string | null;
   direction: "asc" | "desc";
@@ -350,6 +358,7 @@ export function ResourceSortMenu({
   onClear?: () => void;
   placeholderLabel?: string;
   compact?: boolean;
+  quiet?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selectedOption = options.find((option) => option.id === value);
@@ -369,6 +378,7 @@ export function ResourceSortMenu({
         icon="ArrowUpDown"
         active={onClear !== undefined && value !== null}
         open={open}
+        quiet={quiet}
       />
       <DropdownMenuContent
         align="end"

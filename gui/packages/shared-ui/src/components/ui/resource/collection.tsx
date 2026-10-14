@@ -30,12 +30,14 @@ export function ResourceCollectionPage<Mode extends string>({
   actions,
   children,
   bandClassName,
+  underlineTabs = false,
 }: {
   id: string;
-  description: ReactNode;
+  description?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
   bandClassName?: string;
+  underlineTabs?: boolean;
 } & ResourceCollectionModeProps<Mode>) {
   const modeList = modes ?? [];
   const hasModes = modeList.length > 0;
@@ -44,22 +46,27 @@ export function ResourceCollectionPage<Mode extends string>({
   const activePanelId = hasModes ? `${id}-${activeMode}-panel` : undefined;
   return (
     <div className="flex h-full min-h-0 flex-col gap-5">
-      {}
-      <div className="pr-3">
-        <div className={bandClassName}>
-          <ResourceTabDescription>{description}</ResourceTabDescription>
+      {description === undefined ? null : (
+        <div className="pr-3">
+          <div className={bandClassName}>
+            <ResourceTabDescription>{description}</ResourceTabDescription>
+          </div>
         </div>
-      </div>
+      )}
       {hasModes || actions !== undefined ? (
         <div className="pr-3">
           <div
             className={cn(
               "flex flex-wrap items-center justify-between gap-2",
+              underlineTabs && "border-b border-border",
               bandClassName,
             )}
           >
             <div
-              className="flex items-center gap-1"
+              className={cn(
+                "flex items-center",
+                underlineTabs ? "gap-5 self-stretch" : "gap-1",
+              )}
               role={hasModes ? "tablist" : undefined}
             >
               {modeList.map((mode) => {
@@ -76,9 +83,14 @@ export function ResourceCollectionPage<Mode extends string>({
                     aria-controls={`${id}-${mode.id}-panel`}
                     tabIndex={active ? 0 : -1}
                     className={cn(
-                      "inline-flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium",
+                      "inline-flex cursor-pointer items-center gap-1.5 text-sm font-medium",
+                      underlineTabs
+                        ? "h-10 self-stretch"
+                        : "rounded-md px-3 py-1",
                       active
-                        ? "bg-accent text-foreground"
+                        ? underlineTabs
+                          ? "text-foreground shadow-[inset_0_-2px_0_var(--primary)]"
+                          : "bg-accent text-foreground"
                         : "text-muted-foreground hover:text-foreground",
                     )}
                     onClick={() => changeMode(mode.id)}

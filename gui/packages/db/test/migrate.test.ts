@@ -683,6 +683,7 @@ function dropCloudroomSchema(db: DbConnection): void {
     ["threads", "execution_target"],
     ["queued_thread_messages", "hard_queue"],
     ["projects", "hidden_at"],
+    ["threads", "purpose"],
   ]) {
     if (
       db.$client

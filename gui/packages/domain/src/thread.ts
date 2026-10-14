@@ -395,6 +395,8 @@ export const teleportProgressSchema = z.object({
   completed: z.number(), total: z.number(), error: z.string().optional(), cloudStarted: z.boolean().optional(),
 });
 export type TeleportProgress = z.infer<typeof teleportProgressSchema>;
+export const teleportLocalSteps = ["stopping", "downloading", "copying", "switching"] as const;
+export type TeleportLocalStep = (typeof teleportLocalSteps)[number];
 
 export const projectCopyProgressSchema = z.object({
   // `waiting`: the sandbox slept or dropped mid-copy; the copy restarts when it is back.
@@ -403,16 +405,26 @@ export const projectCopyProgressSchema = z.object({
 });
 export type ProjectCopyProgress = z.infer<typeof projectCopyProgressSchema>;
 
+export const threadPurposeSchema = z.object({
+  text: z.string(),
+  percent: z.number().int().min(0).max(100),
+  sourceSeq: z.number().int().nonnegative(),
+  updatedAt: z.number(),
+});
+export type ThreadPurpose = z.infer<typeof threadPurposeSchema>;
+
 export const threadSchema = z.object({
   id: z.string(),
   executionTarget: z.enum(["local", "cloud"]).optional(),
   teleport: teleportProgressSchema.optional(),
+  teleportLocalStep: z.enum(teleportLocalSteps).optional(),
   projectCopy: projectCopyProgressSchema.optional(),
   projectId: z.string(),
   environmentId: z.string().nullable(),
   providerId: z.string(),
   title: z.string().nullable(),
   titleFallback: z.string().nullable(),
+  purpose: threadPurposeSchema.nullable().optional(),
   sectionId: z.string().nullable(),
   status: threadStatusSchema,
   parentThreadId: z.string().nullable(),

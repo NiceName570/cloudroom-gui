@@ -2,6 +2,20 @@
 
 Also on [cloudroom.dev/changelog](https://www.cloudroom.dev/changelog).
 
+## 103
+
+Cloud queue and clearer threads (2026-10-13)
+
+### Changes
+
+- Free accounts can join the Cloud queue, and the app shows your place in line.
+- Free Cloud shows a simple card to sign in with GitHub or upgrade.
+- Hover a thread's title to see what it's for and how far along it is.
+- Hiding a project keeps its automations running.
+- Cloud agents reach your Mac more reliably, with fewer "Mac unavailable" errors.
+- The changes badge counts only work that isn't on GitHub yet.
+- Live Teleport to Local progress, voice recording fixes, and a crash fix. Security fixes.
+
 ## 102
 
 Smoother setup and sign-in (2026-10-13)

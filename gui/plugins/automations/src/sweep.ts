@@ -27,14 +27,37 @@ const hostListSchema = z.array(
   z.object({ status: z.enum(["connected", "disconnected"]) }).passthrough(),
 );
 const projectListSchema = z.array(
-  z.object({ id: z.string(), deletedAt: z.number().nullish() }).passthrough(),
+  z
+    .object({
+      id: z.string(),
+      name: z.string().optional(),
+      deletedAt: z.number().nullish(),
+    })
+    .passthrough(),
 );
-type SweepApi = AgentRunApi & {
+type ProjectListApi = {
   sdk: {
-    hosts: { list(): Promise<unknown> };
-    projects: { list(input: { includePersonal: boolean }): Promise<unknown> };
+    projects: {
+      list(input: {
+        includePersonal?: boolean;
+        hidden?: boolean;
+      }): Promise<unknown>;
+    };
   };
 };
+type SweepApi = AgentRunApi &
+  ProjectListApi & { sdk: { hosts: { list(): Promise<unknown> } } };
+
+export async function listLiveProjects(bb: ProjectListApi) {
+  const [visible, hidden] = await Promise.all([
+    bb.sdk.projects.list({ includePersonal: true }),
+    bb.sdk.projects.list({ hidden: true }),
+  ]);
+  return [
+    ...projectListSchema.parse(visible),
+    ...projectListSchema.parse(hidden),
+  ].filter((project) => !project.deletedAt);
+}
 
 function buildScheduleFailureHandler(
   db: Db,
@@ -146,14 +169,7 @@ async function hasConnectedHost(
 // Empty when the list fails, so a failed lookup never pauses anything.
 async function liveProjectIds(bb: SweepApi): Promise<Set<string>> {
   try {
-    const projects = projectListSchema.parse(
-      await bb.sdk.projects.list({ includePersonal: true }),
-    );
-    return new Set(
-      projects
-        .filter((project) => !project.deletedAt)
-        .map((project) => project.id),
-    );
+    return new Set((await listLiveProjects(bb)).map((project) => project.id));
   } catch (error) {
     bb.log.warn(
       `Failed to list projects for automation sweep: ${errorMessage(error)}`,
@@ -177,18 +193,17 @@ export async function sweepDueAutomations(
   const projectIds = await liveProjectIds(bb);
   const agentHostsAvailable = await hasConnectedHost(bb);
   for (const automation of due) {
-    // A removed project's automations are hidden, so pause them instead of
-    // letting them run unseen.
+    // A deleted project's automations would run unseen, so pause them.
     if (projectIds.size > 0 && !projectIds.has(automation.projectId)) {
       setAutomationEnabled(db, {
         projectId: automation.projectId,
         automationId: automation.id,
         enabled: false,
         nextRunAt: null,
-        lastError: "Paused because its project was removed",
+        lastError: "Paused because its project was deleted",
       });
       bb.log.warn(
-        `Paused automation ${automation.id}: project ${automation.projectId} was removed`,
+        `Paused automation ${automation.id}: project ${automation.projectId} was deleted`,
       );
       continue;
     }

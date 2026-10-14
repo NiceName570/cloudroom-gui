@@ -28,6 +28,7 @@ import {
   parsePorcelainEntries,
   readDefaultBranch,
   readMergeBaseRef,
+  comparisonRef,
   parsePatchId,
   revParse,
   runGit,
@@ -1001,9 +1002,13 @@ export class Workspace {
   }
 
   private async readMergeBaseStatus(
-    mergeBaseBranch: string,
+    branch: string,
     timeoutMs?: number,
   ): Promise<WorkspaceStatus["mergeBase"]> {
+    const mergeBaseBranch = await comparisonRef(this.path, branch, {
+      timeoutMs,
+      ...this.gitProcessOptions,
+    });
     const [mergeBaseRef, aheadBehindCounts, commits, nameStatus, numstat] =
       await Promise.all([
         readMergeBaseRef(this.path, mergeBaseBranch, {
@@ -1045,7 +1050,7 @@ export class Workspace {
     if (aheadBehindCounts.exitCode !== 0) {
       if (isMissingHeadRevisionError(aheadBehindCounts.stderr)) {
         return {
-          mergeBaseBranch,
+          mergeBaseBranch: branch,
           baseRef: null,
           aheadCount: 0,
           behindCount: 0,
@@ -1117,7 +1122,7 @@ export class Workspace {
     }
 
     return {
-      mergeBaseBranch,
+      mergeBaseBranch: branch,
       baseRef: mergeBaseRef ?? null,
       aheadCount: normalizedAheadCount,
       behindCount: normalizedBehindCount,

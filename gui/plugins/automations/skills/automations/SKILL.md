@@ -25,7 +25,7 @@ room-cli automation create --cloud --thread <cloudThreadId> --name "..." --promp
 room-cli automation list --cloud [--thread <cloudThreadId>]
 ```
 
-`show`, `update`, `pause`, `resume`, `run`, and `delete` take a cloud automation's ID (a UUID) without `--project`. Each cloud run is a message in its thread. A missed run fires once; a run waits until the previous one ends; three failed runs in a row pause it. Inside a Cloud thread, use `cloudroom automation` instead.
+`show`, `update`, `pause`, `resume`, `run`, and `delete` take a cloud automation's ID (a UUID) without `--project`. Each cloud run is a message in its thread. A missed run fires once; a run waits until the previous one ends; three failed runs in a row pause it. Inside a Cloud thread, `room-cli automation create` takes no `--cloud` or `--thread`: it schedules that thread.
 
 Choosing a mode:
 

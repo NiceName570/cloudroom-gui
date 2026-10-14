@@ -32,6 +32,10 @@ export const cloudroomStatusSchema = z.object({
   queue_edit: z.boolean().default(false),
   queue_cancel: z.boolean().default(false),
   queue_reorder: z.boolean().default(false),
+  /** The account's place in the cloud queue, or a blocked region: new Cloud threads wait (docs/scopes/public-launch.md). */
+  cloudQueue: z.object({ position: z.number(), total: z.number(), regionBlocked: z.boolean() }).nullable().default(null),
+  /** Free Cloud needs a GitHub sign-in at least 30 days old: new Cloud threads wait for it. */
+  githubRequired: z.boolean().default(false),
   harnesses: z.array(z.object({
     id: z.string(),
     provider: z.string().nullable().optional(),
@@ -203,10 +207,10 @@ export function useTeleportLocal(threadId: string) {
   });
 }
 
-export function useTeleportDirection(thread: Pick<Thread, "id" | "teleport">): "cloud" | "local" | null {
+export function useTeleportDirection(thread: Pick<Thread, "id" | "teleport" | "teleportLocalStep">): "cloud" | "local" | null {
   const toCloud = useIsMutating({ mutationKey: ["cloudroom", "teleport", thread.id], predicate: (mutation) => mutation.state.variables !== "cancel" }) > 0;
   const toLocal = useIsMutating({ mutationKey: ["cloudroom", "teleport-local", thread.id] }) > 0;
-  if (toLocal) return "local";
+  if (toLocal || thread.teleportLocalStep) return "local";
   if (toCloud || (thread.teleport && !["complete", "cancelled", "error"].includes(thread.teleport.phase))) return "cloud";
   return null;
 }

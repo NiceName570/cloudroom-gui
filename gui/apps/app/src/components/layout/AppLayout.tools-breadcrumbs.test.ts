@@ -83,25 +83,13 @@ describe("resolveToolsBreadcrumbs", () => {
 });
 
 describe("resolveAutomationBreadcrumbs", () => {
-  it("maps the installed and browse surfaces to automation breadcrumbs", () => {
+  it("shows only the Automations title on the installed and browse tabs", () => {
     expect(
       resolveAutomationBreadcrumbs("/plugins/automations/automations"),
-    ).toEqual([
-      {
-        label: "Automations",
-        to: "/plugins/automations/automations",
-      },
-      { label: "Installed" },
-    ]);
+    ).toEqual([{ label: "Automations" }]);
     expect(
       resolveAutomationBreadcrumbs("/plugins/automations/automations/browse"),
-    ).toEqual([
-      {
-        label: "Automations",
-        to: "/plugins/automations/automations",
-      },
-      { label: "Browse" },
-    ]);
+    ).toEqual([{ label: "Automations" }]);
   });
 
   it("keeps detail ancestors clickable and replaces the loading fallback label", () => {
@@ -113,19 +101,11 @@ describe("resolveAutomationBreadcrumbs", () => {
         label: "Automations",
         to: "/plugins/automations/automations",
       },
-      {
-        label: "Installed",
-        to: "/plugins/automations/automations",
-      },
       { label: "weekly-review" },
     ]);
     expect(resolveAutomationBreadcrumbs(detailPath, "Weekly review")).toEqual([
       {
         label: "Automations",
-        to: "/plugins/automations/automations",
-      },
-      {
-        label: "Installed",
         to: "/plugins/automations/automations",
       },
       { label: "Weekly review" },
@@ -135,10 +115,6 @@ describe("resolveAutomationBreadcrumbs", () => {
     ).toEqual([
       {
         label: "Automations",
-        to: "/plugins/automations/automations",
-      },
-      {
-        label: "Installed",
         to: "/plugins/automations/automations",
       },
       { label: "Weekly review" },

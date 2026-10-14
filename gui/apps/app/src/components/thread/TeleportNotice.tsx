@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer } from "react";
-import type { Thread } from "@cloudroom/domain";
+import type { TeleportLocalStep, Thread } from "@cloudroom/domain";
 import { Icon } from "@cloudroom/shared-ui/icon";
 import { cn } from "@cloudroom/shared-ui/lib/utils";
 import {
@@ -18,6 +18,64 @@ import { RouteAnchor } from "@/components/ui/app-route-anchor";
 import { FixPrompt } from "@/components/ui/fix-prompt";
 import { projectFilesFixPrompt } from "@/lib/fix-prompts";
 import { getThreadRoutePath } from "@/lib/route-paths";
+
+const LOCAL_STEPS: [TeleportLocalStep, string][] = [
+  ["stopping", "Stop cloud agent"],
+  ["downloading", "Download chat"],
+  ["copying", "Copy code"],
+  ["switching", "Switch to Mac"],
+];
+
+export function TeleportLocalNotice({ step = "stopping" }: { step?: TeleportLocalStep }) {
+  const current = LOCAL_STEPS.findIndex(([id]) => id === step);
+  return (
+    <PromptStackCard
+      ariaLabel="Teleport to Local progress"
+      className="ml-auto mr-3 w-fit max-w-[calc(100%-1.5rem)] overflow-hidden sm:mr-4"
+      style={{ minHeight: PROMPT_STACK_CARD_ROW_HEIGHT }}
+    >
+      <div
+        role="status"
+        aria-label={`Teleporting to Local: ${LOCAL_STEPS[current]?.[1]}`}
+        className="p-0.5 text-xs"
+      >
+        <ol className={cn("flex min-w-0 items-center gap-1.5", PROMPT_STACK_INLAY_SEGMENT_CLASS)}>
+          {LOCAL_STEPS.map(([id, label], index) => (
+            <li
+              key={id}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 transition-colors duration-300",
+                index < current && "text-muted-foreground",
+                index === current && "text-foreground",
+                index > current && "text-muted-foreground/50",
+              )}
+            >
+              {index > 0 && (
+                <span
+                  aria-hidden
+                  className={cn(
+                    "h-px w-4 transition-colors duration-300",
+                    index <= current ? "bg-primary/60" : "bg-border",
+                  )}
+                />
+              )}
+              {index < current ? (
+                <span className="grid size-3.5 place-items-center rounded-full bg-primary text-primary-foreground">
+                  <Icon name="Check" aria-hidden className="size-2.5" />
+                </span>
+              ) : index === current ? (
+                <Icon name="Spinner" aria-hidden className="size-3.5 animate-spin text-primary" />
+              ) : (
+                <span aria-hidden className="mx-0.5 size-2.5 rounded-full border border-current" />
+              )}
+              <span className={cn(index !== current && "hidden sm:inline")}>{label}</span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </PromptStackCard>
+  );
+}
 
 export function TeleportNotice({
   thread,

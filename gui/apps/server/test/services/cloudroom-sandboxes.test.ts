@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 import { cloudroom } from "../../src/services/cloudroom/commands.js";
+import { saveStatus } from "../../src/services/cloudroom/store.js";
 import { createTestAppHarness } from "../helpers/test-app.js";
 import { seedHostSession, seedProjectWithSource } from "../helpers/seed.js";
 import { cloudroomThreads, createThread, getThread } from "@cloudroom/db";
@@ -26,9 +27,10 @@ it("gives each cloud thread its own sandbox, wakes it only for work, and archive
   const { project } = seedProjectWithSource(harness.deps, { hostId: host.id });
   const service = cloudroom(harness.deps);
   const capture = vi.spyOn(harness.deps.telemetry, "capture");
-  const website: { action: string; thread?: string; project?: string; auth?: string; title?: string; project_name?: string; session?: string }[] = [];
+  const website: { action: string; thread?: string; project?: string; auth?: string; title?: string; project_name?: string; session?: string; harness?: string; model?: string }[] = [];
   const core: { path: string; auth?: string }[] = [];
   let state: "new" | "awake" | "asleep" | "archived" = "new";
+  let sandboxThread = "";
   let coreUrl = "";
   const coreServer = createServer(async (req, res) => {
     const json = (value: unknown, status = 200) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(value)); };
@@ -45,9 +47,10 @@ it("gives each cloud thread its own sandbox, wakes it only for work, and archive
   const websiteServer = createServer(async (req, res) => {
     const json = (value: unknown, status = 200) => { res.writeHead(status, { "Content-Type": "application/json" }); res.end(JSON.stringify(value)); };
     const input = await body(req);
-    website.push({ action: input.action ?? input.name, thread: input.thread, project: input.project, auth: req.headers.authorization, title: input.title, project_name: input.project_name, session: input.session });
+    website.push({ action: input.action ?? input.name, thread: input.thread, project: input.project, auth: req.headers.authorization, title: input.title, project_name: input.project_name, session: input.session, harness: input.harness, model: input.model });
     if (req.url === "/api/desktop/logins") return json({ claude: false, codex: false, pi: false, github: false });
-    if (input.action === "wake") state = "awake";
+    if (input.action === "awake") return json({ sandboxes: state === "awake" ? [{ thread: sandboxThread, origin: coreUrl, token: "t".repeat(64) }] : [] });
+    if (input.action === "wake") { state = "awake"; sandboxThread = input.thread; }
     if (input.action === "archive") state = "archived";
     const view = { thread: input.thread, state, generation: state === "awake" ? 1 : 0, issue: null };
     return json(state === "awake" ? { ...view, origin: coreUrl, token: "t".repeat(64) } : view);
@@ -70,9 +73,9 @@ it("gives each cloud thread its own sandbox, wakes it only for work, and archive
     await waitFor(() => saved().sessionId === "cr_one", "cloud start");
     // One website call registers and wakes the new thread's sandbox.
     expect(website.filter(call => call.thread === thread.id && call.action !== "label").map(call => call.action)).toEqual(["wake"]);
-    // Then the website learns the thread's name, project, and Core session, so the web can find it (ADR 0182).
+    // Then the website learns the thread's name, project, harness, model, and Core session (ADR 0182, 0239).
     await waitFor(() => website.some(call => call.action === "label"), "thread label");
-    expect(website.filter(call => call.action === "label")).toMatchObject([{ thread: thread.id, title: "Work in your own sandbox", project_name: project.name, session: "cr_one" }]);
+    expect(website.filter(call => call.action === "label")).toMatchObject([{ thread: thread.id, title: "Work in your own sandbox", project_name: project.name, session: "cr_one", harness: "codex", model: "test-model" }]);
     expect((await harness.app.request(`/api/v1/threads/${thread.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "Renamed" }) })).status).toBeLessThan(300);
     await waitFor(() => website.some(call => call.action === "label" && call.title === "Renamed"), "renamed label");
     expect(website.find(call => call.action === "wake")?.project).toBe(project.id);
@@ -322,3 +325,62 @@ it("tells the user to remove forced API login when Codex refuses ChatGPT sign-in
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+it("sleeping cloud threads share one awake-list check per app, and a thread woken elsewhere connects without a wake", async () => {
+  const harness = await createTestAppHarness();
+  const { host } = seedHostSession(harness.deps);
+  const { project } = seedProjectWithSource(harness.deps, { hostId: host.id });
+  const service = cloudroom(harness.deps);
+  const website: string[] = [];
+  const streams: string[] = [];
+  const awake: string[] = [];
+  let awakeFails = false;
+  let coreUrl = "";
+  const coreServer = createServer((req, res) => {
+    if (req.url?.includes("/stream?")) { streams.push(req.url); res.writeHead(200, { "Content-Type": "text/event-stream" }); res.end(); return; }
+    res.writeHead(404, { "Content-Type": "application/json" }); res.end("{}");
+  });
+  const websiteServer = createServer(async (req, res) => {
+    const input = await body(req);
+    website.push(input.action ?? input.name);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    if (req.url === "/api/desktop/logins") return res.end(JSON.stringify({ claude: false, codex: false, pi: false, github: false }));
+    if (input.action === "awake" && awakeFails) { res.statusCode = 503; return res.end(JSON.stringify({ error: "The website is down." })); }
+    if (input.action === "awake") return res.end(JSON.stringify({ sandboxes: awake.map(thread => ({ thread, origin: coreUrl, token: "t".repeat(64) })), recheck_ms: 1_000 }));
+    res.end(JSON.stringify({ thread: input.thread, state: "asleep", generation: 1, issue: null }));
+  });
+  coreUrl = await listen(coreServer);
+  const websiteUrl = await listen(websiteServer);
+  const count = (action: string) => website.filter(call => call === action).length;
+  try {
+    await service.configure(null, { id: "11111111-1111-4111-8111-111111111111", email: "sandbox@example.com" }, undefined, websiteUrl, "a".repeat(64));
+    const threads = Array.from({ length: 5 }, () => createThread(harness.deps.db, harness.deps.hub, { executionTarget: "cloud", projectId: project.id, providerId: "codex", status: "idle" }));
+    harness.deps.db.insert(cloudroomThreads).values(threads.map((thread, i) => ({ threadId: thread.id, coreUrl: `sandbox:${thread.id}`, sessionId: `cr_${i}`, startRequestId: `start_${i}`, model: "test-model", reasoning: "medium" }))).run();
+
+    const started = Date.now();
+    await new Promise(resolve => setTimeout(resolve, 3_200));
+    expect(count("register")).toBe(0);
+    expect(count("awake")).toBeGreaterThan(0);
+    expect(count("awake")).toBeLessThanOrEqual(Math.ceil((Date.now() - started) / 1_000) + 1);
+    expect(streams).toEqual([]);
+
+    awake.push(threads[0]!.id);
+    await waitFor(() => streams.some(url => url.includes("cr_0")), "stream for the thread woken elsewhere");
+    expect(streams.every(url => url.includes("cr_0"))).toBe(true);
+    expect(count("wake")).toBe(0);
+    expect(count("register")).toBe(0);
+
+    // A failed check is a connection problem, not proof of sleep: a running thread keeps its status.
+    saveStatus(harness.deps.db, threads[1]!.id, "active");
+    awakeFails = true;
+    const failedFrom = count("awake");
+    await new Promise(resolve => setTimeout(resolve, 2_500));
+    expect(getThread(harness.deps.db, threads[1]!.id)?.status).toBe("active");
+    expect(count("awake") - failedFrom).toBeGreaterThan(0);
+    expect(count("awake") - failedFrom).toBeLessThanOrEqual(3);
+    expect(count("register")).toBe(0);
+  } finally {
+    service.stop();
+    coreServer.close(); websiteServer.close();
+  }
+}, 20_000);

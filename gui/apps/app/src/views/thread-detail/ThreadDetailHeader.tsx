@@ -10,6 +10,13 @@ import { useAtomValue } from "jotai";
 import { Icon } from "@cloudroom/shared-ui/icon";
 import { Pill } from "@cloudroom/shared-ui/pill";
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@cloudroom/shared-ui/hover-card";
+import type { ThreadPurpose } from "@cloudroom/domain";
+import { formatRelativeTime } from "@/lib/relative-time";
+import {
   AppPageHeader,
   COMPACT_SHELF_HIDDEN_PAGE_HEADER_ACTIONS_CLASS,
   HEADER_ICON_BUTTON_CLASS,
@@ -47,7 +54,48 @@ interface ThreadDetailHeaderProps {
   pluginActions?: ReactNode;
   shareButton?: ReactNode;
   threadId: string;
+  threadPurpose?: ThreadPurpose | null;
   threadTitle: string;
+}
+
+function ThreadPurposeHoverCard({
+  children,
+  purpose,
+}: {
+  children: ReactNode;
+  purpose: ThreadPurpose | null;
+}) {
+  if (!purpose) return children;
+  return (
+    <HoverCard openDelay={250} closeDelay={100}>
+      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardContent
+        align="start"
+        sideOffset={8}
+        className="w-[420px] max-w-[calc(100vw-2rem)] space-y-3 px-[18px] py-4"
+      >
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <span className="font-medium uppercase tracking-wider">Purpose</span>
+          <span>
+            updated{" "}
+            {formatRelativeTime({ timestamp: purpose.updatedAt, now: Date.now() })}
+          </span>
+        </div>
+        <p className="text-sm leading-relaxed text-foreground">{purpose.text}</p>
+        <div className="flex items-center gap-3">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary"
+              style={{ width: `${purpose.percent}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+            {purpose.percent}% done
+          </span>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
 }
 
 export function ThreadDetailHeader({
@@ -59,6 +107,7 @@ export function ThreadDetailHeader({
   pluginActions,
   shareButton,
   threadId,
+  threadPurpose = null,
   threadTitle,
 }: ThreadDetailHeaderProps) {
   const isCompactViewport = useIsCompactViewport();
@@ -121,26 +170,31 @@ export function ThreadDetailHeader({
           isSplitPaneHeader && isFocused && CONTEXT_SELECTION_SURFACE_CLASS,
         )}
       >
-        <p
-          className={cn(
-            "relative min-w-0 text-xs font-normal text-foreground/70 transition-colors",
-            isEditing ? "overflow-visible" : "bb-thread-title",
-            isSplitPaneHeader &&
-              !isFocused &&
-              dimsInactiveSplits &&
-              CONTEXT_INACTIVE_TEXT_CLASS,
-            beginPaneDrag &&
-              !isEditing &&
-              cn(
-                "cursor-grab touch-none select-none",
-                usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
-              ),
-          )}
-          onDoubleClick={handleTitleDoubleClick}
-          onPointerDown={beginPaneDrag ? handleTitlePointerDown : undefined}
-        >
-          {isEditing ? editor : <ThreadTitleMentions title={threadTitle} />}
-        </p>
+        <ThreadPurposeHoverCard purpose={isEditing ? null : threadPurpose}>
+          <p
+            className={cn(
+              "relative min-w-0 text-xs font-normal text-foreground/70 transition-colors",
+              isEditing ? "overflow-visible" : "bb-thread-title",
+              usesDesktopChrome &&
+                threadPurpose !== null &&
+                MACOS_WINDOW_NO_DRAG_CLASS,
+              isSplitPaneHeader &&
+                !isFocused &&
+                dimsInactiveSplits &&
+                CONTEXT_INACTIVE_TEXT_CLASS,
+              beginPaneDrag &&
+                !isEditing &&
+                cn(
+                  "cursor-grab touch-none select-none",
+                  usesDesktopChrome && MACOS_WINDOW_NO_DRAG_CLASS,
+                ),
+            )}
+            onDoubleClick={handleTitleDoubleClick}
+            onPointerDown={beginPaneDrag ? handleTitlePointerDown : undefined}
+          >
+            {isEditing ? editor : <ThreadTitleMentions title={threadTitle} />}
+          </p>
+        </ThreadPurposeHoverCard>
       </div>
       {childPillLabel ? (
         <Pill variant="outline" size="sm">

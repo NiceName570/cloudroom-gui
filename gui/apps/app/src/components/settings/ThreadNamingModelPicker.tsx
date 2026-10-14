@@ -19,7 +19,7 @@ import {
   SETTINGS_DROPDOWN_TRIGGER_CLASS,
 } from "./settings-dropdown";
 
-interface DropdownOption {
+export interface DropdownOption {
   value: string | null;
   label: string;
 }
@@ -32,7 +32,7 @@ interface SettingsDropdownProps {
   onSelect: (value: string | null) => void;
 }
 
-function SettingsDropdown(props: SettingsDropdownProps) {
+export function SettingsDropdown(props: SettingsDropdownProps) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -82,6 +82,8 @@ interface ThreadNamingModelPickerProps {
   defaultValue: string | null;
   /** Offer "None" as a harness, which clears the value. */
   allowNone?: boolean;
+  scope?: string;
+  defaultLabel?: string;
   onChange: (value: string | null) => void;
 }
 
@@ -114,7 +116,7 @@ export function ThreadNamingModelPicker(props: ThreadNamingModelPickerProps) {
   const modelLabel = pickedHarness
     ? "Choose a model"
     : props.value === null
-      ? `Default (${labelOf(modelOptions, current)})`
+      ? `Default (${props.defaultLabel ?? labelOf(modelOptions, current)})`
       : labelOf(modelOptions, current);
   const name = (text: string) =>
     props.prefix ? `${props.prefix} ${text.toLowerCase()}` : text;
@@ -135,7 +137,7 @@ export function ThreadNamingModelPicker(props: ThreadNamingModelPickerProps) {
         description={props.harnessDescription}
       >
         <SettingsDropdown
-          label={`Thread naming ${name("Harness").toLowerCase()}`}
+          label={`${props.scope ?? "Thread naming"} ${name("Harness").toLowerCase()}`}
           options={harnessOptions}
           selected={harness}
           triggerLabel={labelOf(harnessOptions, harness)}
@@ -145,7 +147,7 @@ export function ThreadNamingModelPicker(props: ThreadNamingModelPickerProps) {
       {harness ? (
         <SettingsWithControl label={name("Model")}>
           <SettingsDropdown
-            label={`Thread naming ${name("Model").toLowerCase()}`}
+            label={`${props.scope ?? "Thread naming"} ${name("Model").toLowerCase()}`}
             options={modelOptions}
             selected={pickedHarness ? null : current}
             triggerLabel={modelLabel}

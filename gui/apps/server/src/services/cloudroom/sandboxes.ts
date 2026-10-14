@@ -25,6 +25,10 @@ const viewSchema = z.object({
   startup: z.object({ source: z.enum(["spare", "image", "template", "backup", "resume", "restart", "reuse"]), duration_ms: z.number().nonnegative() }).optional().catch(undefined),
 });
 type View = z.infer<typeof viewSchema>;
+const awakeSchema = z.object({
+  sandboxes: z.array(z.object({ thread: z.string(), origin: z.string().url(), token: z.string() })),
+  recheck_ms: z.number().int().min(1_000).max(3_600_000).catch(60_000),
+});
 export type SandboxAccount = { website: string; userId: string; token: string };
 export type SandboxConnection = { url: string; token: string };
 export type SandboxTrigger = "app_launch" | "app_activity" | "composer" | "thread_typing" | "thread_view";
@@ -34,9 +38,12 @@ export type SandboxWakeTrigger = Extract<SandboxTrigger, "thread_typing" | "thre
 export type SandboxLogin = "claude" | "codex" | "pi" | "github" | "cursor" | "opencode" | "mcp" | "hermes";
 /** GitHub projects also name their repository and cloud folder, so the website can build a template. */
 export type SandboxProject = { id: string; repository: string | null; folder: string };
-// A sleeping sandbox is only looked up again after this long; sending work wakes it at once.
 const RECHECK_MS = 60_000;
+export type CloudQueue = { position: number; total: number; regionBlocked: boolean };
 const USAGE_LIMIT = "cloud_usage_limit";
+const CLOUD_QUEUE = "cloud_queue";
+const CLOUD_REGION = "cloud_region";
+const NEEDS_GITHUB = "github_account_required";
 // The Mac's skills and global instructions that sandboxes receive, one way (docs/scopes/sandboxes.md).
 const SKILL_ROOTS = [".agents/skills", ".claude/skills", ".codex/skills", ".pi/agent/skills"];
 const INSTRUCTION_FILES = [".claude/CLAUDE.md", ".codex/AGENTS.md", ".pi/agent/AGENTS.md", ".config/opencode/AGENTS.md"];
@@ -317,9 +324,8 @@ export function revokeDesktopToken(account: SandboxAccount): void {
 
 /** Each cloud thread's own sandbox, managed by the website (docs/scopes/sandboxes.md). Lookups never wake it. */
 export class SandboxDirectory {
-  private readonly views = new Map<string, { view: View; at: number }>();
+  private readonly views = new Map<string, View>();
   private readonly wakes = new Map<string, Promise<View>>();
-  private readonly lookups = new Map<string, Promise<View>>();
   private readonly wakeStarts = new Map<string, number>();
   private readonly wakeHarnesses = new Map<string, Awaited<ReturnType<typeof macHarnessVersions>>>();
   // After a failed wake, wait before asking again. Network and server errors retry every 2 s three times first;
@@ -348,6 +354,8 @@ export class SandboxDirectory {
       if (response.status === 409 && /busy/i.test(message)) throw new CloudroomConnectionError(message);
       const code = typeof value.code === "string" ? value.code : null;
       if (code === USAGE_LIMIT) this.limit = { on: true, at: Date.now() };
+      // Refused for the cloud queue, the region, or a missing GitHub sign-in: ask again soon, so the composer shows the right card.
+      if (code === CLOUD_QUEUE || code === CLOUD_REGION || code === NEEDS_GITHUB) this.mode = null;
       throw new CloudroomError(message, response.status >= 500 ? null : response.status, code);
     }
     return value;
@@ -378,11 +386,6 @@ export class SandboxDirectory {
     const value = await this.call({ action }, "invites");
     const joined = z.object({ name: z.string().nullable(), at: z.string() }).optional();
     return z.object({ codes: z.array(z.object({ code: z.string(), used: z.boolean(), url: z.string().optional(), joined })), left: z.number(), created: z.string().nullable(), waiting: z.number().nullable().default(null) }).parse(value);
-  }
-
-  /** Whether to remind this member to book an onboarding call, and the booking link (docs/scopes/onboarding-calls.md). */
-  async onboardingCall() {
-    return z.object({ due: z.boolean(), url: z.string().url().optional() }).parse(await this.call({}, "onboarding-call"));
   }
 
   /** Whether the website judges a generated thread title too vague to keep, at the user's sensitivity (2–5). */
@@ -418,23 +421,45 @@ export class SandboxDirectory {
   }
 
   private remember(view: View): View {
-    this.views.set(view.thread, { view, at: Date.now() });
+    this.views.set(view.thread, view);
     return view;
+  }
+
+  private awake = new Map<string, { origin: string; token: string }>();
+  private awakeNext = 0;
+  private awakeEvery = 60_000;
+  private awakeIssue: CloudroomError | null = null;
+  private awakeCheck: Promise<void> | null = null;
+  /** The account's awake sandboxes: one website call per app, at most every `recheck_ms`, however many threads it has.
+   *  A failed check is retried within 10 s and keeps `awakeIssue`, so threads it can't place aren't taken for asleep. */
+  private async awakeList(): Promise<Map<string, { origin: string; token: string }>> {
+    if (Date.now() < this.awakeNext) return this.awake;
+    if (!this.awakeCheck) {
+      const check: Promise<void> = this.call({ action: "awake" }).then(value => awakeSchema.parse(value)).then(listed => {
+        if (this.awakeCheck !== check) return;
+        this.awake = new Map(listed.sandboxes.map(({ thread, origin, token }) => [thread, { origin, token }]));
+        this.awakeEvery = listed.recheck_ms;
+        this.awakeIssue = null;
+        this.awakeNext = Date.now() + listed.recheck_ms;
+      }, (error: unknown) => {
+        if (this.awakeCheck !== check) return;
+        this.awakeIssue = error instanceof CloudroomError ? error : new CloudroomError("The website's list of awake cloud sandboxes was unreadable.");
+        this.awakeNext = Date.now() + Math.min(this.awakeEvery, 10_000);
+      }).finally(() => { if (this.awakeCheck === check) this.awakeCheck = null; });
+      this.awakeCheck = check;
+    }
+    await this.awakeCheck;
+    return this.awake;
   }
 
   /** The thread's Core, or null while it sleeps. `wake` starts it; only callers with work to send pass true. */
   async connection(thread: string, project: SandboxProject, wake: boolean, trigger?: SandboxWakeTrigger): Promise<SandboxConnection | null> {
-    const cached = this.views.get(thread);
-    let view = cached?.view;
+    let view = this.views.get(thread);
     const place = { thread, project: project.id, ...(project.repository ? { repository: project.repository, folder: project.folder } : {}) };
-    // A wake registers too, so only lookups need their own call. Every thread in a sandbox shares one lookup.
-    if (!wake && (!view || (view.state !== "awake" && Date.now() - cached!.at > RECHECK_MS))) {
-      let lookup = this.lookups.get(thread);
-      if (!lookup) {
-        lookup = this.call({ action: "register", ...place }).then(value => this.remember(viewSchema.parse(value))).finally(() => this.lookups.delete(thread));
-        this.lookups.set(thread, lookup);
-      }
-      view = await lookup;
+    if (!wake && view?.state !== "awake") {
+      const found = (await this.awakeList()).get(thread);
+      if (found) view = this.remember({ thread, state: "awake", generation: view?.generation ?? 0, issue: null, ...found });
+      else if (this.awakeIssue) throw this.awakeIssue;
     }
     if (view?.state === "awake" && view.origin && view.token) return { url: view.origin, token: view.token };
     if (!wake) return null;
@@ -477,12 +502,27 @@ export class SandboxDirectory {
   }
 
   private async checkMode(): Promise<boolean> {
-    const value = z.object({ sandboxes: z.boolean(), limited: z.boolean().default(false), small_disk: z.boolean().default(false) }).parse(await this.call({ action: "mode" }));
+    const value = z.object({
+      sandboxes: z.boolean(), limited: z.boolean().default(false), small_disk: z.boolean().default(false),
+      queue: z.object({ position: z.number(), total: z.number() }).nullable().default(null), region_blocked: z.boolean().default(false),
+      github_required: z.boolean().default(false),
+    }).parse(await this.call({ action: "mode" }));
+    this.github = value.github_required;
     this.mode = { on: value.sandboxes, at: Date.now() };
     this.limit = { on: value.limited, at: Date.now() };
     this.small = value.small_disk;
+    this.queue = value.queue || value.region_blocked ? { position: value.queue?.position ?? 0, total: value.queue?.total ?? 0, regionBlocked: value.region_blocked } : null;
     return value.sandboxes;
   }
+
+  private queue: CloudQueue | null = null;
+  /** The account's place in the cloud queue, or a blocked region: new Cloud threads wait (docs/scopes/public-launch.md).
+   *  Null when it may start them. Refreshed with forNewThreads(). */
+  cloudQueue(): CloudQueue | null { return this.queue; }
+
+  private github = false;
+  /** Free Cloud needs a GitHub sign-in at least 30 days old; until then new Cloud threads wait. Refreshed with forNewThreads(). */
+  githubRequired(): boolean { return this.github; }
 
   private small = false;
   /** Free accounts get 10 GB sandboxes, so a full disk is their moment to upgrade (ADR 0206). Refreshed with usageLimited(). */
@@ -496,7 +536,7 @@ export class SandboxDirectory {
   wokeSince(thread: string, at: number): boolean { return (this.wakeStarts.get(thread) ?? 0) >= at; }
 
   startupSince(thread: string, at: number) {
-    const startup = this.views.get(thread)?.view.startup;
+    const startup = this.views.get(thread)?.startup;
     const versions = this.wakeHarnesses.get(thread);
     if (!this.wokeSince(thread, at)) return { startup_source: "reuse" as const, sandbox_start_ms: 0, versions };
     return { startup_source: startup?.source ?? null, sandbox_start_ms: startup?.duration_ms ?? null, versions };
@@ -514,10 +554,15 @@ export class SandboxDirectory {
   /** Forgets what was learned under the last account: sandbox tokens, uploaded logins and config, and its settings. */
   reset(): void {
     this.views.clear();
+    this.awake = new Map();
+    this.awakeNext = 0;
+    this.awakeIssue = null;
+    this.awakeCheck = null;
     this.backoff.clear();
     this.uploaded.clear();
     this.mode = null;
     this.limit = null;
+    this.github = false;
     this.warmed = null;
     this.copiedAt = 0;
     this.pulledAt = 0;
@@ -528,11 +573,11 @@ export class SandboxDirectory {
   }
 
   /** A broken stream or failed request may mean the sandbox went to sleep; look it up again next time. */
-  forget(thread: string): void { this.views.delete(thread); }
+  forget(thread: string): void { this.views.delete(thread); this.awake.delete(thread); }
   coolingDown(thread: string | null): boolean { return Boolean(thread && (this.backoff.get(thread)?.until ?? 0) > Date.now()); }
 
-  /** Saves a thread's title, project name, and Core session ID on the website (ADR 0182). */
-  async label(thread: string, label: { title: string | null; project_name: string | null; session: string }): Promise<void> {
+  /** Saves a thread's title, project name, harness, model, and Core session ID on the website (ADR 0182, 0239). */
+  async label(thread: string, label: { title: string | null; project_name: string | null; session: string; harness: string; model: string | null }): Promise<void> {
     await this.call({ action: "label", thread, ...label });
   }
   async archive(thread: string): Promise<void> { this.forget(thread); await this.call({ action: "archive", thread }); }

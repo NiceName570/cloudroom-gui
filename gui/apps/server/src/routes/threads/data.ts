@@ -50,6 +50,7 @@ import {
 import { callHostRetryableOnlineRpc } from "../../services/hosts/online-rpc.js";
 import {
   createDaemonFileContentResponse,
+  setUntrustedFileHeaders,
   type DaemonFileReadResult,
   serveDaemonFileContent,
 } from "../../services/hosts/daemon-file-response.js";
@@ -805,9 +806,17 @@ export function registerThreadDataRoutes(app: Hono, deps: AppDeps): void {
   get(routes.hostFileContent, async (context, query) => {
     const thread = requirePublicThread(deps.db, context.req.param("id"));
     if (isCloudThread(thread)) {
-      return new Response(new Uint8Array(await cloudFile(deps, thread.id, query.path)), {
-        headers: { "content-type": mimeTypes.lookup(query.path) || "application/octet-stream" },
-      });
+      return new Response(
+        new Uint8Array(await cloudFile(deps, thread.id, query.path)),
+        {
+          headers: setUntrustedFileHeaders(
+            new Headers({
+              "content-type":
+                mimeTypes.lookup(query.path) || "application/octet-stream",
+            }),
+          ),
+        },
+      );
     }
     if (!thread.environmentId) {
       throwThreadEnvironmentUnavailable(

@@ -534,6 +534,9 @@ importers:
       '@cloudroom/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@cloudroom/process-utils':
+        specifier: workspace:*
+        version: link:../../packages/process-utils
       '@cloudroom/server-contract':
         specifier: workspace:*
         version: link:../../packages/server-contract

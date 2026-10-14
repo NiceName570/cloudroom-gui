@@ -12,7 +12,7 @@ Give an agent the API keys it needs without pasting them into chat. The agent as
 The agent runs one command from inside a thread:
 
 ```
-cloudroom secret request OPENAI_API_KEY --purpose "Configure the server" --describe OPENAI_API_KEY "OpenAI key" --write-env .env.local
+room-cli secret request OPENAI_API_KEY --purpose "Configure the server" --describe OPENAI_API_KEY "OpenAI key" --write-env .env.local
 ```
 
 The form shows the purpose, the destination path, and one field per name. Submit to write the file, or cancel to stop the command. Each value must be a single non-empty line of at most 16 KiB. The write is checked against the file version the plugin read, so an edit made at the same time does not get lost.

@@ -391,6 +391,8 @@ const showLoadingToast: AppToastMethod = (title, options) =>
 
 export const appToast = {
   dismiss: sonnerToast.dismiss,
+  isOpen: (id: number | string) =>
+    sonnerToast.getToasts().some((toast) => toast.id === id),
   error: showErrorToast,
   loading: showLoadingToast,
   message: showMessageToast,

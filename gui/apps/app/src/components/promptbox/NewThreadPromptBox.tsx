@@ -125,6 +125,8 @@ export interface NewThreadModeConfig {
   cloudInputsSlot?: ReactNode;
   banner?: ReactNode;
   header?: ReactNode;
+  /** Under the environment row, like the cloud queue card. */
+  footer?: ReactNode;
 }
 
 interface NewThreadPromptBoxUIProps {
@@ -458,6 +460,7 @@ const DefaultNewThreadComposer = memo(function DefaultNewThreadComposer({
           />
         </div>
       </div>
+      {modeConfig.footer}
     </div>
   );
 });
