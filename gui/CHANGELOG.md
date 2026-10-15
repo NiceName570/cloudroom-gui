@@ -2,6 +2,20 @@
 
 Also on [cloudroom.dev/changelog](https://www.cloudroom.dev/changelog).
 
+## 104
+
+Devin in Cloud and quick forks (2026-10-14)
+
+### Changes
+
+- Run Devin in Cloud threads, using your Mac's Devin login.
+- Select text in a chat to reply, fork a new thread with it quoted, or open a side chat.
+- Import chats from Pi and Hermes, and open a folder in one click when you have no chats yet.
+- Add your Mac's CLIs to a Cloud environment's setup script with one click.
+- Smarter thread names, exact model names in pickers, and new sidebar icons.
+- Switching a running Claude Code thread to Manual now takes effect on your next message.
+- Cloud threads no longer freeze on a stuck message, subagents no longer start twice, and error cards can be closed. Security fixes.
+
 ## 103
 
 Cloud queue and clearer threads (2026-10-13)

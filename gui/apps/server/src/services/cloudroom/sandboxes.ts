@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 import { gzipSync } from "node:zlib";
 import type { HostDaemonContributedEnvEntry } from "@cloudroom/host-daemon-contract";
 import { findCliExecutable } from "@cloudroom/process-utils";
+import { rawThreadIdSchema } from "@cloudroom/domain";
 import matter from "gray-matter";
 import { z } from "zod";
 import { hasSupportedFrontmatterDelimiter } from "../skills/injected-skills.js";
@@ -25,8 +26,12 @@ const viewSchema = z.object({
   startup: z.object({ source: z.enum(["spare", "image", "template", "backup", "resume", "restart", "reuse"]), duration_ms: z.number().nonnegative() }).optional().catch(undefined),
 });
 type View = z.infer<typeof viewSchema>;
+// Threads cloud automations started from the website (ADR 0239): `source` is the automation's own Cloud thread.
+const runSchema = z.object({ thread: rawThreadIdSchema, project: z.string(), title: z.string().nullable(), session: z.string().regex(/^cr_[A-Za-z0-9_-]{1,80}$/), source: z.string() });
+export type AutomationRun = z.infer<typeof runSchema>;
 const awakeSchema = z.object({
   sandboxes: z.array(z.object({ thread: z.string(), origin: z.string().url(), token: z.string() })),
+  runs: z.array(runSchema).catch([]).default([]),
   recheck_ms: z.number().int().min(1_000).max(3_600_000).catch(60_000),
 });
 export type SandboxAccount = { website: string; userId: string; token: string };
@@ -35,7 +40,7 @@ export type SandboxTrigger = "app_launch" | "app_activity" | "composer" | "threa
 /** Why a sleeping thread wakes before any work is sent: the user opened it or started typing (ADR 0176). */
 export type SandboxWakeTrigger = Extract<SandboxTrigger, "thread_typing" | "thread_view">;
 /** Logins the website keeps for every sandbox of an account (ADR 0145). */
-export type SandboxLogin = "claude" | "codex" | "pi" | "github" | "cursor" | "opencode" | "mcp" | "hermes";
+export type SandboxLogin = "claude" | "codex" | "pi" | "github" | "cursor" | "opencode" | "mcp" | "hermes" | "devin";
 /** GitHub projects also name their repository and cloud folder, so the website can build a template. */
 export type SandboxProject = { id: string; repository: string | null; folder: string };
 const RECHECK_MS = 60_000;
@@ -186,6 +191,13 @@ async function macHermesLogin(): Promise<string | null> {
   return auth.trim() || env.trim() ? JSON.stringify(login) : null;
 }
 
+/** This computer's Devin CLI login file, or null when Devin is signed out here. */
+export async function macDevinLogin(): Promise<string | null> {
+  const path = join(process.env.XDG_DATA_HOME || join(homedir(), ".local/share"), "devin", "credentials.toml");
+  const credentials = await readFile(path, "utf8").catch(() => "");
+  return credentials.trim() ? JSON.stringify({ credentials }) : null;
+}
+
 /** This computer's Cursor CLI login in the file shape the CLI keeps on Linux, or null when Cursor is signed out here.
  *  On macOS the CLI stores it in the Keychain through /usr/bin/security, so reading it the same way shows no macOS prompt. */
 export async function macCursorLogin(): Promise<string | null> {
@@ -332,6 +344,8 @@ export class SandboxDirectory {
   // then 5 s, doubling to 5 minutes. Delivery retries every tick otherwise.
   private readonly backoff = new Map<string, { until: number; delay: number; tries: number }>();
   private uploaded = new Map<string, string>();
+  /** Gets the threads automations started, from each awake check; the app shows the ones it doesn't have yet. */
+  onRuns: (runs: AutomationRun[]) => void = () => {};
   /** `woke` runs after each wake, so the Mac helper lists the new sandbox now instead of at its next minute check. */
   constructor(readonly account: () => Promise<SandboxAccount | null>, private readonly woke: (thread: string) => void = () => {}) {}
 
@@ -438,6 +452,7 @@ export class SandboxDirectory {
       const check: Promise<void> = this.call({ action: "awake" }).then(value => awakeSchema.parse(value)).then(listed => {
         if (this.awakeCheck !== check) return;
         this.awake = new Map(listed.sandboxes.map(({ thread, origin, token }) => [thread, { origin, token }]));
+        if (listed.runs.length) this.onRuns(listed.runs);
         this.awakeEvery = listed.recheck_ms;
         this.awakeIssue = null;
         this.awakeNext = Date.now() + listed.recheck_ms;
@@ -682,7 +697,7 @@ export class SandboxDirectory {
   /** Which logins the website holds for this account's sandboxes. */
   async logins(): Promise<Record<SandboxLogin, boolean>> {
     // Missing names mean an older website that cannot hold that login yet.
-    return z.object({ claude: z.boolean(), codex: z.boolean(), pi: z.boolean(), github: z.boolean(), cursor: z.boolean().default(false), opencode: z.boolean().default(false), mcp: z.boolean().default(false), hermes: z.boolean().default(false) }).parse(await this.call({ action: "status" }, "logins"));
+    return z.object({ claude: z.boolean(), codex: z.boolean(), pi: z.boolean(), github: z.boolean(), cursor: z.boolean().default(false), opencode: z.boolean().default(false), mcp: z.boolean().default(false), hermes: z.boolean().default(false), devin: z.boolean().default(false) }).parse(await this.call({ action: "status" }, "logins"));
   }
 
   /** Who the account's GitHub login belongs to, or null when GitHub or an older website can't tell. */
@@ -698,7 +713,7 @@ export class SandboxDirectory {
 
   private copiedAt = 0;
   get loginsCopied(): boolean { return this.copiedAt > 0; }
-  /** Copies this Mac's Codex, Pi, opencode, Hermes, Cursor, and GitHub logins when the user allowed it (ADRs 0128, 0130).
+  /** Copies this Mac's Codex, Pi, opencode, Hermes, Devin, Cursor, and GitHub logins when the user allowed it (ADRs 0128, 0130).
    *  At most once a minute, unless the user just clicked Connect. `github` is false after the user picked another GitHub account. */
   async copyMacLogins(force = false, github = true): Promise<void> {
     if (!force && Date.now() - this.copiedAt < RECHECK_MS) return;
@@ -707,7 +722,7 @@ export class SandboxDirectory {
     const files = [["codex", codexAuthPath()], ["pi", join(piHome, "auth.json")]] as const;
     // One failed login never stops the others; all failures are reported together.
     const failed: string[] = [];
-    const save = (name: "codex" | "pi" | "opencode" | "hermes" | "cursor" | "github", value: string) => this.saveLogin(name, value).catch((error: unknown) => { failed.push(`${name}: ${error instanceof Error ? error.message : String(error)}`); });
+    const save = (name: "codex" | "pi" | "opencode" | "hermes" | "devin" | "cursor" | "github", value: string) => this.saveLogin(name, value).catch((error: unknown) => { failed.push(`${name}: ${error instanceof Error ? error.message : String(error)}`); });
     for (const [name, path] of files) {
       const value = await readFile(path, "utf8").catch(() => null);
       if (!value) continue;
@@ -718,6 +733,8 @@ export class SandboxDirectory {
     if (opencode) await save("opencode", opencode);
     const hermes = await macHermesLogin();
     if (hermes) await save("hermes", hermes);
+    const devin = await macDevinLogin();
+    if (devin) await save("devin", devin);
     const cursor = await macCursorLogin();
     if (cursor) await save("cursor", cursor);
     const githubToken = github ? await macGithubToken() : "";

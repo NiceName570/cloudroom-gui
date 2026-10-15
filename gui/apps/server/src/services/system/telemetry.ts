@@ -17,7 +17,7 @@ export const SETUP_STEPS = ["account", "agent", "github", "project"] as const;
 export const SETUP_ACTIONS = ["viewed", "started", "done", "skipped", "closed", "detected", "waitlist"] as const;
 /** Agents besides Claude Code and Codex that setup can find signed in on the Mac. */
 export const SETUP_AGENTS = ["pi", "opencode", "cursor", "hermes", "grok", "devin"] as const;
-export const SETUP_DETAILS = ["github", "google", "email", "claude", "codex", "both", "none", "existing", "found", "folder", "bb_import", "chat_import", ...SETUP_AGENTS] as const;
+export const SETUP_DETAILS = ["github", "google", "email", "claude", "codex", "both", "none", "existing", "found", "folder", "recent_folder", "bb_import", "chat_import", ...SETUP_AGENTS] as const;
 
 export type TelemetryValue = string | number | boolean | null;
 
@@ -96,7 +96,10 @@ export type TelemetryEvent =
         marketplace: string | null;
         source_kind: "builtin" | "git" | "npm" | "path";
       };
-    };
+    }
+  /** Plugin use counts and which plugins are on; built in services/plugins/plugin-usage-telemetry.ts. */
+  | { name: "plugin_usage"; properties: { plugin_id: string; tool: number; cli: number; mention: number; ui: number } }
+  | { name: "plugins_snapshot"; properties: { enabled: string; disabled: string } };
 
 export type PluginTelemetryProperties = Record<string, TelemetryValue>;
 

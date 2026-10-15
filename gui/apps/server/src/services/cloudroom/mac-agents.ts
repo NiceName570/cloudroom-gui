@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { findCliExecutable } from "@cloudroom/process-utils";
-import { macCursorLogin, macOpencodeLogin } from "./sandboxes.js";
+import { macCursorLogin, macDevinLogin, macOpencodeLogin } from "./sandboxes.js";
 
 const json = (path: string) => readFile(path, "utf8").then(text => JSON.parse(text) as unknown, () => null);
 const filled = (value: unknown) => Boolean(value && typeof value === "object" && Object.values(value).some(entry => Array.isArray(entry) ? entry.length : entry));
@@ -22,7 +22,7 @@ const AGENTS: [id: string, cli: string, signedIn: () => Promise<boolean>][] = [
   ["acp-cursor", "cursor-agent", async () => Boolean(process.env.CURSOR_API_KEY) || (await macCursorLogin()) !== null],
   ["acp-hermes-agent", "hermes", hermesSignedIn],
   ["acp-grok", "grok", async () => Boolean(process.env.XAI_API_KEY) || hasText(join(process.env.GROK_HOME || join(homedir(), ".grok"), "auth.json"))],
-  ["acp-devin", "devin", () => hasText(join(process.env.XDG_DATA_HOME || join(homedir(), ".local/share"), "devin", "credentials.toml"))],
+  ["acp-devin", "devin", async () => (await macDevinLogin()) !== null],
 ];
 
 /** The extra agents installed and signed in on this computer, most used first, so setup can offer them.

@@ -44,7 +44,10 @@ import {
   useCloudLogin,
 } from "@/components/CodexConnectionPanel";
 import { RowStateControl, RowVersions } from "./UpdatesSettingsSection";
-import { useCloudroomAccount } from "@/hooks/queries/cloudroom-queries";
+import {
+  cloudCanRunHarness,
+  useCloudroomAccount,
+} from "@/hooks/queries/cloudroom-queries";
 import {
   useHostProviderCliStatus,
   useInstallableProviders,
@@ -331,7 +334,15 @@ function CodexCloudLogin({ kind }: { kind: "codex" | "cursor" }) {
 function CloudLogin({ provider }: { provider: ProviderInfo }) {
   if (provider.id === "claude-code") return <ClaudeCloudLogin />;
   const kind = CLOUD_LOGINS[provider.id];
-  return kind === undefined ? DASH : <CodexCloudLogin kind={kind} />;
+  if (kind !== undefined) return <CodexCloudLogin kind={kind} />;
+  // Pi, opencode, Hermes, fx, and Devin have no Cloud sign-in: the Cloud reuses this Mac's login (ADR 0130).
+  return cloudCanRunHarness(provider.id) ? (
+    <Check
+      label={`${provider.displayName} runs in the Cloud with this Mac's login`}
+    />
+  ) : (
+    DASH
+  );
 }
 
 function AutoUpdateSwitch({

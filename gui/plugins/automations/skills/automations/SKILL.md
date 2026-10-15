@@ -18,14 +18,16 @@ Personal supports automations with `--project proj_personal`. Use `room-cli proj
 
 Local or cloud:
 
-Automations above run on this Mac, only while it is awake and Cloudroom is running. A cloud automation runs on Cloudroom's servers instead: it re-prompts one existing Cloud thread (its harness and model) on a schedule, even while the Mac is off. Use cloud when the work should keep going with the laptop closed. Cloud automations have no script mode; the prompt can tell the agent to run a script.
+Automations above run on this Mac, only while it is awake and Cloudroom is running. A cloud automation runs on Cloudroom's servers instead, at most every 15 minutes, even while the Mac is off. It belongs to one existing Cloud thread: each run re-prompts that thread, or with `--new-thread` starts a fresh Cloud thread in its own sandbox with that thread's project, harness, model, and `.env` files. Use cloud when the work should keep going with the laptop closed.
+
+A cloud `--script`/`--script-file` runs first, as the agent in that thread's sandbox and project folder, for up to 60 seconds. Empty output skips the run with no agent turn; any output is added to the prompt; a non-zero exit is a failed run. The script keeps its own state (say, a cursor file) in that sandbox and needs its logins there too.
 
 ```bash
-room-cli automation create --cloud --thread <cloudThreadId> --name "..." --prompt "..." (--cron "<expr>" --timezone <tz> | --at <datetime> | --in <duration>)
+room-cli automation create --cloud --thread <cloudThreadId> --name "..." --prompt "..." (--cron "<expr>" --timezone <tz> | --at <datetime> | --in <duration>) [--new-thread] [--script-file <path>]
 room-cli automation list --cloud [--thread <cloudThreadId>]
 ```
 
-`show`, `update`, `pause`, `resume`, `run`, and `delete` take a cloud automation's ID (a UUID) without `--project`. Each cloud run is a message in its thread. A missed run fires once; a run waits until the previous one ends; three failed runs in a row pause it. Inside a Cloud thread, `room-cli automation create` takes no `--cloud` or `--thread`: it schedules that thread.
+`show`, `update`, `pause`, `resume`, `run`, and `delete` take a cloud automation's ID (a UUID) without `--project`. A re-prompt run is a message in its thread; a `--new-thread` run is its own thread, which the app shows when it next checks in. A missed run fires once; a run waits until the previous one ends; three failed runs in a row pause it. Inside a Cloud thread, `room-cli automation create` takes no `--cloud` or `--thread`: it schedules that thread.
 
 Choosing a mode:
 
