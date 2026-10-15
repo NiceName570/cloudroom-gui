@@ -871,10 +871,13 @@ room-cli automation run <automationId> --project <id> [--idempotency-key <key>]
 room-cli automation runs <automationId> --project <id> [--limit <count>] [--output <runId>]
 room-cli automation delete <automationId> --project <id> --yes
 
-Cloud automations run on Cloudroom's servers, even while this Mac is off, at most every 15 minutes. Each run re-prompts
-one Cloud thread, or with --new-thread starts a fresh Cloud thread in its own sandbox from that thread's project and agent.
-A --script/--script-file runs first in the thread's sandbox (60 s): no output skips the run, output is added to the prompt.
-room-cli automation create --cloud --thread <cloudThreadId> --name <name> --prompt <text> (--cron <expr> --timezone <tz> | --at <datetime> | --in <duration>) [--new-thread] [--script <inline> | --script-file <path>]
+Cloud automations run on Cloudroom's servers, even while this Mac is off, at most every 15 minutes. A --cron run starts a
+fresh Cloud thread in its own sandbox from that thread's project and agent; --same-thread re-prompts the thread instead.
+A one-time --at/--in run re-prompts the thread; --new-thread gives it a fresh one.
+A fresh-thread automation saves the thread's settings, so it keeps running after that thread is archived.
+A --script/--script-file runs first (60 s), in the automation's own sandbox with fresh threads, else in the thread's:
+no output skips the run, output is added to the prompt.
+room-cli automation create --cloud --thread <cloudThreadId> --name <name> --prompt <text> (--cron <expr> --timezone <tz> | --at <datetime> | --in <duration>) [--new-thread | --same-thread] [--script <inline> | --script-file <path>]
 room-cli automation list --cloud [--thread <cloudThreadId>]
 room-cli automation show|pause|resume|run <cloudAutomationId>
 room-cli automation update <cloudAutomationId> [--name <name>] [--prompt <text>] [schedule flags] [--script <inline> | --script-file <path> | --no-script]
@@ -947,7 +950,7 @@ async function runCloudCommand(bb: Pick<BbPluginApi, "sdk">, args: ParsedArgs, c
     const schedule = cloudSchedule(args);
     if (!schedule) throw new Error("Provide exactly one schedule flag: --cron, --at, or --in.");
     return one({ action: "create", thread, name: requireFlag(args, "name"), prompt: requireFlag(args, "prompt"), ...schedule, enabled: !boolFlag(args, "disabled"),
-      ...(boolFlag(args, "new-thread") ? { new_thread: true } : {}), ...await cloudScript(bb, args, ctx) }, "created");
+      ...(boolFlag(args, "new-thread") ? { new_thread: true } : boolFlag(args, "same-thread") ? { new_thread: false } : {}), ...await cloudScript(bb, args, ctx) }, "created");
   }
   if (args.command === "update") {
     const fields = { ...(flag(args, "name") ? { name: flag(args, "name") } : {}), ...(flag(args, "prompt") ? { prompt: flag(args, "prompt") } : {}), ...cloudSchedule(args), ...await cloudScript(bb, args, ctx) };

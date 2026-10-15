@@ -117,11 +117,12 @@ export function useCloudroomConnection() {
   return useQuery({ queryKey: ["cloudroom-connection"], queryFn: async ({ signal }) => cloudroomStatusSchema.parse(await (await fetchWithAppSurface("/api/v1/cloudroom", { signal })).json()), refetchInterval: 10000 });
 }
 
-/** Agents besides Claude Code and Codex that are installed and signed in on this Mac, by provider ID. Checked once per app run. */
-export function useMacAgents() {
+export function useMacAgents(enabled = true) {
   return useQuery({
     queryKey: ["cloudroom-mac-agents"],
+    enabled,
     staleTime: Infinity,
+    gcTime: Infinity,
     queryFn: async ({ signal }) => z.object({ agents: z.array(z.string()) }).parse(await (await fetchWithAppSurface("/api/v1/cloudroom/mac/agents", { signal })).json()).agents,
   });
 }

@@ -2,9 +2,22 @@
 
 Also on [cloudroom.dev/changelog](https://www.cloudroom.dev/changelog).
 
+## 105
+
+Safer archiving and steadier automations (2026-10-15)
+
+### Changes
+
+- Cloud automations keep running after you archive their chat, and recurring ones start a fresh thread for each run.
+- Archiving asks first if anything in the thread is still running, and Undo keeps sub-agents under their parent.
+- The expand arrow in the sidebar no longer jumps under the Archive button.
+- Free accounts see how many cloud agents and hours are left, with a one-click upgrade when they hit a limit.
+- Settings marks which agents are Mac only, and setup offers your other signed-in agents.
+- Image previews close when you add the image to chat, and thread notes are shorter.
+
 ## 104
 
-Devin in Cloud and quick forks (2026-10-14)
+Steadier Cloud threads and quick forks (2026-10-14)
 
 ### Changes
 

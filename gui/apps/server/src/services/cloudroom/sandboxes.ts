@@ -26,8 +26,10 @@ const viewSchema = z.object({
   startup: z.object({ source: z.enum(["spare", "image", "template", "backup", "resume", "restart", "reuse"]), duration_ms: z.number().nonnegative() }).optional().catch(undefined),
 });
 type View = z.infer<typeof viewSchema>;
-// Threads cloud automations started from the website (ADR 0239): `source` is the automation's own Cloud thread.
-const runSchema = z.object({ thread: rawThreadIdSchema, project: z.string(), title: z.string().nullable(), session: z.string().regex(/^cr_[A-Za-z0-9_-]{1,80}$/), source: z.string() });
+// Threads cloud automations started from the website (ADR 0239): `source` is the automation's own Cloud thread, and
+// `harness`/`model` the run's own agent, for when that thread is gone (ADR 0250).
+const runSchema = z.object({ thread: rawThreadIdSchema, project: z.string(), title: z.string().nullable(), session: z.string().regex(/^cr_[A-Za-z0-9_-]{1,80}$/), source: z.string(),
+  harness: z.string().nullable().optional().catch(null), model: z.string().nullable().optional().catch(null) });
 export type AutomationRun = z.infer<typeof runSchema>;
 const awakeSchema = z.object({
   sandboxes: z.array(z.object({ thread: z.string(), origin: z.string().url(), token: z.string() })),
@@ -45,7 +47,10 @@ export type SandboxLogin = "claude" | "codex" | "pi" | "github" | "cursor" | "op
 export type SandboxProject = { id: string; repository: string | null; folder: string };
 const RECHECK_MS = 60_000;
 export type CloudQueue = { position: number; total: number; regionBlocked: boolean };
+/** A Free account's 30-day usage, for the sidebar upgrade card. */
+export type PlanUsage = { agents: number; agentsLimit: number; cpuHours: number | null; cpuHoursLimit: number };
 const USAGE_LIMIT = "cloud_usage_limit";
+const AGENT_LIMIT = "cloud_agent_limit";
 const CLOUD_QUEUE = "cloud_queue";
 const CLOUD_REGION = "cloud_region";
 const NEEDS_GITHUB = "github_account_required";
@@ -490,9 +495,11 @@ export class SandboxDirectory {
       }).then(value => this.remember(viewSchema.parse(value))).then(view => {
         this.woke(view.thread);
         this.backoff.delete(thread);
+        this.capped.delete(thread);
         if (this.limit?.on) this.limit = { on: false, at: Date.now() };
         return view;
       }, error => {
+        if (error instanceof CloudroomError && error.code === AGENT_LIMIT) this.capped.add(thread);
         const previous = this.backoff.get(thread);
         const tries = (previous?.tries ?? 0) + 1;
         // A 4xx answer (say, usage limit) won't fix itself in 2 s, so it backs off at once.
@@ -520,9 +527,10 @@ export class SandboxDirectory {
     const value = z.object({
       sandboxes: z.boolean(), limited: z.boolean().default(false), small_disk: z.boolean().default(false),
       queue: z.object({ position: z.number(), total: z.number() }).nullable().default(null), region_blocked: z.boolean().default(false),
-      github_required: z.boolean().default(false),
+      github_required: z.boolean().default(false), plan: z.string().nullable().default(null),
     }).parse(await this.call({ action: "mode" }));
     this.github = value.github_required;
+    this.plan = value.plan;
     this.mode = { on: value.sandboxes, at: Date.now() };
     this.limit = { on: value.limited, at: Date.now() };
     this.small = value.small_disk;
@@ -538,6 +546,31 @@ export class SandboxDirectory {
   private github = false;
   /** Free Cloud needs a GitHub sign-in at least 30 days old; until then new Cloud threads wait. Refreshed with forNewThreads(). */
   githubRequired(): boolean { return this.github; }
+
+  private readonly capped = new Set<string>();
+  /** Whether this new thread was refused for its plan's launch cap; cleared when it starts. */
+  agentLimited(thread: string): boolean { return this.capped.has(thread); }
+
+  private plan: string | null = null;
+  private usage: { value: PlanUsage | null; next: number } | null = null;
+  private checkingUsage = false;
+  /** A Free account's usage; null for paid plans, in the cloud queue, or before the website answers. Its plan is
+   *  refreshed with forNewThreads(); the usage itself as often as the website says. */
+  planUsage(): PlanUsage | null {
+    if (this.plan !== "free" || this.queue) return null;
+    if (!this.checkingUsage && Date.now() >= (this.usage?.next ?? 0)) {
+      this.checkingUsage = true;
+      void this.call({ action: "usage" }).then((value) => {
+        const free = z.object({ agents: z.number(), agents_limit: z.number(), cpu_hours: z.number().nullable(), cpu_hours_limit: z.number() }).safeParse(value);
+        const recheck = z.object({ recheck_seconds: z.number().default(600) }).parse(value).recheck_seconds;
+        this.usage = {
+          value: free.success ? { agents: free.data.agents, agentsLimit: free.data.agents_limit, cpuHours: free.data.cpu_hours, cpuHoursLimit: free.data.cpu_hours_limit } : null,
+          next: Date.now() + Math.max(recheck, 60) * 1000,
+        };
+      }, () => { this.usage = { value: this.usage?.value ?? null, next: Date.now() + RECHECK_MS }; }).finally(() => { this.checkingUsage = false; });
+    }
+    return this.usage?.value ?? null;
+  }
 
   private small = false;
   /** Free accounts get 10 GB sandboxes, so a full disk is their moment to upgrade (ADR 0206). Refreshed with usageLimited(). */
@@ -578,6 +611,9 @@ export class SandboxDirectory {
     this.mode = null;
     this.limit = null;
     this.github = false;
+    this.plan = null;
+    this.usage = null;
+    this.capped.clear();
     this.warmed = null;
     this.copiedAt = 0;
     this.pulledAt = 0;

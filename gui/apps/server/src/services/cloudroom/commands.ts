@@ -428,14 +428,16 @@ class CloudroomService {
 
   /** A thread a cloud automation started from the website, say while this Mac was off (ADR 0239). It shows like any
    *  Cloud thread, with the automation's thread's agent; its history streams in once its sandbox is awake or opened.
-   *  Only the Mac that has the automation's thread shows it, and a thread this app already has is left alone. */
+   *  Only the Mac that has the automation's project shows it, and a thread this app already has is left alone. */
   private adoptRun(run: AutomationRun): void {
+    // The automation's thread gives the agent; once it is deleted, the run's own label does (ADR 0250).
     const source = getThread(this.deps.db, run.source), home = binding(this.deps.db, run.source);
-    if (!source || !home || source.projectId !== run.project || !getProject(this.deps.db, run.project) || getThread(this.deps.db, run.thread)) return;
+    const providerId = source && home ? source.providerId : run.harness, model = home?.model ?? run.model;
+    if (!providerId || !model || (source && source.projectId !== run.project) || !getProject(this.deps.db, run.project) || getThread(this.deps.db, run.thread)) return;
     const adopted = this.deps.db.transaction(tx => {
       if (getThread(tx, run.thread) || tx.select().from(cloudroomThreads).where(eq(cloudroomThreads.sessionId, run.session)).get()) return false;
-      createThread(tx, this.deps.hub, { id: run.thread, executionTarget: "cloud", projectId: run.project, providerId: source.providerId, title: run.title, titleFallback: "Automation run", status: "pending" });
-      tx.insert(cloudroomThreads).values({ threadId: run.thread, coreUrl: SANDBOX_PREFIX + run.thread, sessionId: run.session, startRequestId: run.session.replace(/^cr_/, ""), model: home.model, reasoning: home.reasoning }).run();
+      createThread(tx, this.deps.hub, { id: run.thread, executionTarget: "cloud", projectId: run.project, providerId, title: run.title, titleFallback: "Automation run", status: "pending" });
+      tx.insert(cloudroomThreads).values({ threadId: run.thread, coreUrl: SANDBOX_PREFIX + run.thread, sessionId: run.session, startRequestId: run.session.replace(/^cr_/, ""), model, reasoning: home?.reasoning ?? "medium" }).run();
       return true;
     });
     if (!adopted) return;
@@ -811,7 +813,7 @@ class CloudroomService {
           steer: capabilities?.steer ?? false, rewind: capabilities?.rewind ?? false, attachments: capabilities?.attachments ?? false,
           compact: capabilities?.compact ?? false, queue_edit: capabilities?.queue_edit ?? false, queue_cancel: capabilities?.queue_cancel ?? false,
           queue_reorder: capabilities?.queue_reorder ?? false, error: null, cloudQueue: this.sandboxes.cloudQueue(),
-          githubRequired: this.sandboxes.githubRequired(),
+          githubRequired: this.sandboxes.githubRequired(), planUsage: this.sandboxes.planUsage(),
         };
       }
       const connection = await this.connection();
@@ -970,7 +972,9 @@ class CloudroomService {
   }
 
   async codexAuth(action?: "login" | "cancel", requestId?: string) {
-    if (await this.sandboxLogin("codex")) {
+    const sandbox = await this.sandboxLogin("codex");
+    if (sandbox) {
+      let copied = false;
       if (action === "cancel") cancelMacCodexLogin();
       if (action === "login") {
         if (await copyLogins(this.deps) !== true) {
@@ -978,12 +982,17 @@ class CloudroomService {
           throw new ApiError(409, "codex_auth_unsupported", "Cloud sandboxes use this Mac's Codex login. Turn on \"Auth my agents in the cloud automatically\" in Settings → Cloud, then try again.");
         }
         // Signed out or expired here: sign in on this Mac first, then the next status check copies the new login.
-        if (await hasMacCodexLogin() && !await macCodexLoginExpired()) await this.sandboxes.copyMacLogins(true, await copyMacGithub(this.deps));
-        else startMacCodexLogin();
+        if (await hasMacCodexLogin() && !await macCodexLoginExpired()) {
+          await this.sandboxes.copyMacLogins(true, await copyMacGithub(this.deps));
+          copied = true;
+        } else startMacCodexLogin();
       }
       const run = macCodexLogin();
-      if (run?.done && !run.error) await this.sandboxes.copyMacLogins(true, await copyMacGithub(this.deps));
-      const status = (await this.sandboxLogin("codex"))!;
+      if (run?.done && !run.error) {
+        await this.sandboxes.copyMacLogins(true, await copyMacGithub(this.deps));
+        copied = true;
+      }
+      const status = copied ? (await this.sandboxLogin("codex"))! : sandbox;
       if (status.state === "connected" && (action === "login" || run?.done)) reportAgentConnect("codex", "ok", { cliPlace: cliPlace(findCliExecutable("codex")) });
       if (status.state === "connected" || !run) return status;
       if (run.error) {
@@ -1070,7 +1079,7 @@ class CloudroomService {
     const serviceTier = input.service_tier === "fast" ? "fast" : "default";
     const initial = prompts.find(item => item.id === `first_${threadId}`);
     const issues = Object.values(this.connectionIssues.get(threadId) ?? {});
-    return { authRequired: !saved.sessionId && authRequiredMessages.has(saved.error ?? ""), starting: !saved.queuePaused && Boolean(initial && ["sending", "accepted"].includes(initial.state)), sessionId: saved.sessionId, paused: saved.queuePaused, failedStart: !saved.sessionId && initial?.state === "failed", model: saved.model, reasoning, serviceTier, error: saved.error ?? issues.find(issue => !issue.reconnecting)?.message ?? null, reconnecting: issues.some(issue => issue.reconnecting), usageLimit: Boolean(sandboxThread(saved.coreUrl)) && this.sandboxes.usageLimited(), diskFull: this.diskFull.has(threadId) && Boolean(sandboxThread(saved.coreUrl)) && this.sandboxes.smallDisk(), pendingDelivery: commands(this.deps.db, threadId).filter((c) => c.state === "sending").length };
+    return { authRequired: !saved.sessionId && authRequiredMessages.has(saved.error ?? ""), starting: !saved.queuePaused && Boolean(initial && ["sending", "accepted"].includes(initial.state)), sessionId: saved.sessionId, paused: saved.queuePaused, failedStart: !saved.sessionId && initial?.state === "failed", model: saved.model, reasoning, serviceTier, error: saved.error ?? issues.find(issue => !issue.reconnecting)?.message ?? null, reconnecting: issues.some(issue => issue.reconnecting), usageLimit: Boolean(sandboxThread(saved.coreUrl)) && (this.sandboxes.usageLimited() || this.sandboxes.agentLimited(sandboxThread(saved.coreUrl) ?? "")), diskFull: this.diskFull.has(threadId) && Boolean(sandboxThread(saved.coreUrl)) && this.sandboxes.smallDisk(), pendingDelivery: commands(this.deps.db, threadId).filter((c) => c.state === "sending").length };
   }
 
   async create(request: CreateThreadRequest, awaitingCore = false): Promise<Thread> {

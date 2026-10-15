@@ -39,7 +39,6 @@ const STEPS = ["Sign in", "Connect an agent", "Connect GitHub", "Import your wor
 const STEP_IDS = ["account", "agent", "github", "project"] as const;
 type SetupStepId = (typeof STEP_IDS)[number];
 type SetupDetail = "claude" | "codex" | "both" | "none" | "existing" | "found" | "folder" | "recent_folder" | "bb_import" | "chat_import" | "pi" | "opencode" | "cursor" | "hermes" | "grok" | "devin";
-/** The telemetry name of an extra agent: `acp-hermes-agent` is `hermes`. */
 const agentDetail = (id: string) => id.replace(/^acp-/, "").replace(/-agent$/, "") as SetupDetail;
 function track(step: SetupStepId, action: "viewed" | "started" | "done" | "skipped" | "closed" | "detected", detail: SetupDetail | null = null, agents?: SetupDetail[]) {
   void fetchWithAppSurface("/api/v1/cloudroom/setup-step", {
@@ -72,11 +71,12 @@ export function useSetupProgress() {
     retry: false,
     refetchInterval: (query) => (query.state.data?.state === "waiting" ? 1500 : false),
   });
-  // An agent besides Claude Code and Codex counts once the user picks it as their default.
   const defaultAgent = useSystemConfig().data?.generalSettings.defaultProviderId ?? null;
-  const other = defaultAgent === "claude-code" || defaultAgent === "codex" ? null : defaultAgent;
-  const otherName = useSystemProviders().data?.find((provider) => provider.id === other)?.displayName ?? other;
-  const agents = { claude: claude.data?.state === "connected", codex: codex.data?.state === "connected", other, otherName };
+  const extra = defaultAgent === "claude-code" || defaultAgent === "codex" ? null : defaultAgent;
+  const provider = useSystemProviders().data?.find((entry) => entry.id === extra);
+  const signedIn = useMacAgents(extra !== null).data?.includes(extra ?? "") === true;
+  const other = provider && signedIn ? provider.id : null;
+  const agents = { claude: claude.data?.state === "connected", codex: codex.data?.state === "connected", other, otherName: other && provider?.displayName };
   const done = [Boolean(accountId), agents.claude || agents.codex || other !== null, github.data?.state === "connected"];
   return { account, ready, offline, agents, codex, github, done, complete: done.every(Boolean), checking: account.isPending };
 }
@@ -224,7 +224,6 @@ function Setup({ locked, close }: { locked: boolean; close: () => void }) {
   );
 }
 
-/** Makes an agent the default for new threads, in Settings and in the composer. */
 function useSetDefaultAgent() {
   const settings = useSystemConfig().data?.generalSettings;
   const update = useUpdateGeneralSettings();
@@ -503,10 +502,7 @@ function AgentLogo({ id, className, small = false }: { id: string; className: st
   );
 }
 
-/** Agents besides Claude Code and Codex, installed and signed in on this Mac, as one quiet row of chips.
- *  Picking one makes it the default agent. Nothing shows when the Mac has none. */
 function MoreAgents({ agents, picked, pick }: { agents: string[]; picked: string | null; pick: (agent: string) => void }) {
-  // Only agents the app can run here, so picking one never leaves a default it can't start.
   const providers = useSystemProviders().data ?? [];
   const shown = agents.flatMap((id) => providers.filter((provider) => provider.id === id));
   if (!shown.length) return null;
