@@ -2,6 +2,19 @@
 
 Also on [cloudroom.dev/changelog](https://www.cloudroom.dev/changelog).
 
+## 106
+
+Cloud without GitHub, steadier Mac access (2026-10-15)
+
+### Changes
+
+- Free accounts can start Cloud threads without a GitHub sign-in.
+- Cloud automations with a check script can run as often as every minute.
+- Copying big files to your Mac works on slow connections, and a busy Mac now says "Mac not responding" instead of "Mac unavailable".
+- Cloud agents can read a subagent's full answer with room-cli thread output.
+- Forking a Local thread keeps it Local.
+- File paths in chat no longer jitter when you hover them.
+
 ## 105
 
 Safer archiving and steadier automations (2026-10-15)

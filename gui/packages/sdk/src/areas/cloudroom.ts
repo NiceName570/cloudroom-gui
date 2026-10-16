@@ -39,8 +39,6 @@ export interface CloudroomStatus {
   signInError: string | null;
   /** The account's place in the cloud queue, or a blocked region: new Cloud threads wait. Null when it may start them. */
   cloudQueue?: { position: number; total: number; regionBlocked: boolean } | null;
-  /** Free Cloud needs a GitHub sign-in at least 30 days old. */
-  githubRequired?: boolean;
   /** A Free account's 30-day usage, for the sidebar upgrade card. Null for paid plans or while in the cloud queue. */
   planUsage?: { agents: number; agentsLimit: number; cpuHours: number | null; cpuHoursLimit: number } | null;
 }

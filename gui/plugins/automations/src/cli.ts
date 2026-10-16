@@ -871,8 +871,9 @@ room-cli automation run <automationId> --project <id> [--idempotency-key <key>]
 room-cli automation runs <automationId> --project <id> [--limit <count>] [--output <runId>]
 room-cli automation delete <automationId> --project <id> --yes
 
-Cloud automations run on Cloudroom's servers, even while this Mac is off, at most every 15 minutes. A --cron run starts a
-fresh Cloud thread in its own sandbox from that thread's project and agent; --same-thread re-prompts the thread instead.
+Cloud automations run on Cloudroom's servers, even while this Mac is off: every minute with a script, else at most every
+15 minutes. A --cron run starts a fresh Cloud thread in its own sandbox from that thread's project and agent;
+--same-thread re-prompts the thread instead.
 A one-time --at/--in run re-prompts the thread; --new-thread gives it a fresh one.
 A fresh-thread automation saves the thread's settings, so it keeps running after that thread is archived.
 A --script/--script-file runs first (60 s), in the automation's own sandbox with fresh threads, else in the thread's:

@@ -153,13 +153,6 @@ This blocks common catastrophic shell commands; it is not a sandbox.
 - Cloudroom releases restorable provider sessions after 30 idle minutes.
 - Active turns, commands, agents, workflows, and monitors keep sessions loaded.
 
-## Mobile app
-
-- The `mobileApp` experiment defaults to false while the cloudroom mobile app is in
-  early access.
-- Enable it with `room-cli settings experiment mobileApp true`. It shows the
-  **Add mobile device** card under Settings → Remote access.
-
 ## Changelog preview
 
 - The `changelogPreview` experiment defaults to false.

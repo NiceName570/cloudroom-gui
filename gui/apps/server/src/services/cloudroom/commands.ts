@@ -406,17 +406,19 @@ class CloudroomService {
       return saved?.sandboxToken && saved.account ? { website: saved.websiteUrl ?? HOSTED_WEBSITE, userId: saved.account.id, token: saved.sandboxToken } : null;
     }, thread => void noteWake(deps, thread).catch(() => {}));
     this.sandboxes.onRuns = runs => { for (const run of runs) this.adoptRun(run); };
-    // Renames, generated titles, and agent renames all reach the website. Read after the change's transaction ends.
-    deps.hub.onThreadChanged((threadId, changes) => { if (changes.includes("title-changed") || changes.includes("execution-options-changed")) setImmediate(() => this.syncLabel(threadId)); });
+    // Renames, generated titles, agent renames, and new parents (a promoted subagent loses its parent's access) all
+    // reach the website. Read after the change's transaction ends.
+    deps.hub.onThreadChanged((threadId, changes) => { if (changes.includes("title-changed") || changes.includes("execution-options-changed") || changes.includes("parent-changed")) setImmediate(() => this.syncLabel(threadId)); });
   }
 
   private readonly labels = new Map<string, string>();
-  /** Keeps the website's copy of a sandbox thread's title, project name, harness, model, and Core session current, so
-   *  the web can list it and read its history (ADR 0182, 0239). Subagents share their parent's sandbox and are found through its history. */
+  /** Keeps the website's copy of a sandbox thread's title, project name, harness, model, Core session, and parent
+   *  current, so the web can list it and read its history, and the thread that started it can too (ADR 0182, 0239,
+   *  0256). Subagents sharing their parent's sandbox are found through its history. */
   private syncLabel(threadId: string): void {
     const saved = binding(this.deps.db, threadId), thread = getThread(this.deps.db, threadId);
     if (!saved?.sessionId || !thread || sandboxThread(saved.coreUrl) !== threadId) return;
-    const label = { title: thread.title ?? thread.titleFallback ?? null, project_name: getProject(this.deps.db, thread.projectId)?.name ?? null, session: saved.sessionId, harness: thread.providerId, model: thread.modelOverride ?? saved.model };
+    const label = { title: thread.title ?? thread.titleFallback ?? null, project_name: getProject(this.deps.db, thread.projectId)?.name ?? null, session: saved.sessionId, harness: thread.providerId, model: thread.modelOverride ?? saved.model, parent: thread.parentThreadId ?? null };
     const key = JSON.stringify(label);
     if (this.labels.get(threadId) === key) return;
     this.labels.set(threadId, key);
@@ -813,7 +815,7 @@ class CloudroomService {
           steer: capabilities?.steer ?? false, rewind: capabilities?.rewind ?? false, attachments: capabilities?.attachments ?? false,
           compact: capabilities?.compact ?? false, queue_edit: capabilities?.queue_edit ?? false, queue_cancel: capabilities?.queue_cancel ?? false,
           queue_reorder: capabilities?.queue_reorder ?? false, error: null, cloudQueue: this.sandboxes.cloudQueue(),
-          githubRequired: this.sandboxes.githubRequired(), planUsage: this.sandboxes.planUsage(),
+          planUsage: this.sandboxes.planUsage(),
         };
       }
       const connection = await this.connection();

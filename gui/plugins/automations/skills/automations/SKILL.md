@@ -18,7 +18,7 @@ Personal supports automations with `--project proj_personal`. Use `room-cli proj
 
 Local or cloud:
 
-Automations above run on this Mac, only while it is awake and Cloudroom is running. A cloud automation runs on Cloudroom's servers instead, at most every 15 minutes, even while the Mac is off. It belongs to one existing Cloud thread. Each `--cron` run starts a fresh Cloud thread in its own sandbox with that thread's project, harness, model, and `.env` files; `--same-thread` re-prompts that thread instead. A one-time `--at`/`--in` run re-prompts the thread; `--new-thread` gives it a fresh one. Use cloud when the work should keep going with the laptop closed.
+Automations above run on this Mac, only while it is awake and Cloudroom is running. A cloud automation runs on Cloudroom's servers instead, even while the Mac is off: every minute with a script, else at most every 15 minutes. It belongs to one existing Cloud thread. Each `--cron` run starts a fresh Cloud thread in its own sandbox with that thread's project, harness, model, and `.env` files; `--same-thread` re-prompts that thread instead. A one-time `--at`/`--in` run re-prompts the thread; `--new-thread` gives it a fresh one. Use cloud when the work should keep going with the laptop closed.
 
 A fresh-thread automation saves that thread's settings (project, agent, model, effort, repo, `.env` files) when it is created, so it keeps running after the thread is archived. A same-thread one pauses when its thread is archived.
 
