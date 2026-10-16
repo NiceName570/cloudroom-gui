@@ -10,5 +10,6 @@ export function getDesktopVersion(version: string | undefined): string {
 export function resolveBbDesktopPlatform(
   platform: NodeJS.Platform,
 ): BbDesktopInfo["platform"] {
+  if (platform === "win32") return "windows";
   return platform === "darwin" ? "macos" : "linux";
 }

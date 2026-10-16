@@ -2161,7 +2161,9 @@ async function runDesktopApp(): Promise<void> {
   }
 
   const applicationName = app.isPackaged
-    ? DESKTOP_RELEASE_INFO.applicationName
+    ? process.platform === "win32"
+      ? "Cloudroom Windows"
+      : DESKTOP_RELEASE_INFO.applicationName
     : "Cloudroom Dev";
   app.setName(applicationName);
   installAboutPanel(applicationName);

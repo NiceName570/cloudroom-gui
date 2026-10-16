@@ -20,6 +20,15 @@ const alwaysReplaceable = () => true;
 const neverReplaceable = () => false;
 
 describe("desktop update support", () => {
+  it("keeps the Windows fork off upstream release feeds", () => {
+    expect(
+      resolveDesktopUpdateSupport({
+        canReplaceAppImage: alwaysReplaceable,
+        env: {},
+        platform: "windows",
+      }),
+    ).toEqual({ autoUpdate: false, versionCheck: false });
+  });
   it("enables both update paths on macOS", () => {
     expect(
       resolveDesktopUpdateSupport({

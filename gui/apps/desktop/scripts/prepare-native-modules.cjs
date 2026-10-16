@@ -125,6 +125,7 @@ async function patchNodePtyHelperPath(packageDirectory) {
 }
 
 async function prepareNodePtyPackageDirectory(packageDirectory) {
+  if (process.platform === "win32") return;
   await patchNodePtyHelperPath(packageDirectory);
 
   await Promise.all(
@@ -307,7 +308,12 @@ async function afterPack(context) {
           "MacOS",
           productName,
         )
-      : path.join(context.appOutDir, context.packager.executableName);
+      : path.join(
+          context.appOutDir,
+          platform === "win32"
+            ? `${productName}.exe`
+            : context.packager.executableName,
+        );
   await smokePackagedNpm(appBinary);
 }
 

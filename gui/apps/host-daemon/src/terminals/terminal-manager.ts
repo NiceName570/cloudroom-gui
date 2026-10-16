@@ -199,7 +199,8 @@ function disposeNodePty(pty: ReturnType<typeof spawnPty>): void {
 
 const nodePtyAdapter: TerminalPtyAdapter = {
   spawn(args) {
-    ensureNodePtySpawnHelperExecutable(args.logger);
+    if (process.platform !== "win32")
+      ensureNodePtySpawnHelperExecutable(args.logger);
     const pty = spawnPty(args.file, args.args, {
       cols: args.cols,
       cwd: args.cwd,
@@ -330,6 +331,15 @@ function isNonEmptyString(value: string | undefined): value is string {
 }
 
 async function resolveDefaultTerminalShell(): Promise<string> {
+  if (process.platform === "win32") {
+    return path.join(
+      process.env.SystemRoot ?? "C:\\Windows",
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    );
+  }
   const candidates = [
     process.env.SHELL,
     "/bin/zsh",
@@ -386,7 +396,15 @@ function terminalTitleFromCommand(command: string): string {
   return `${normalized.slice(0, 77)}...`;
 }
 
-function terminalSpawnArgsForStart(message: TerminalOpenMessage): string[] {
+function terminalSpawnArgsForStart(
+  message: TerminalOpenMessage,
+  platform: NodeJS.Platform,
+): string[] {
+  if (platform === "win32" && message.target.kind !== "cloud") {
+    return message.start.mode === "shell"
+      ? ["-NoLogo"]
+      : ["-NoLogo", "-NoProfile", "-Command", message.start.command];
+  }
   switch (message.start.mode) {
     case "shell":
       return [];
@@ -540,16 +558,6 @@ export class TerminalManager {
       return;
     }
 
-    if (this.platform === "win32") {
-      this.sendTerminalError({
-        code: "unsupported_platform",
-        message: "Native Windows terminals are not supported",
-        requestId: message.requestId,
-        terminalId: message.terminalId,
-      });
-      return;
-    }
-
     this.openingTerminalIds.add(message.terminalId);
     try {
       const { pty, shell, target } = await this.startTerminalProcess(message);
@@ -649,7 +657,7 @@ export class TerminalManager {
     const target = await this.resolveTerminalOpenTarget(message);
     const shell = await this.resolveShell();
     const pty = this.ptyAdapter.spawn({
-      args: terminalSpawnArgsForStart(message),
+      args: terminalSpawnArgsForStart(message, this.platform),
       cols: message.cols,
       cwd: target.cwd,
       env: buildTerminalEnv({

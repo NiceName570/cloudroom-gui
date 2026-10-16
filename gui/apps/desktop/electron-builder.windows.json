@@ -1,0 +1,22 @@
+{
+  "extends": "./electron-builder.config.json",
+  "appId": "dev.cloudroom.windows",
+  "productName": "Cloudroom Windows",
+  "artifactName": "installer.${ext}",
+  "publish": null,
+  "compression": "normal",
+  "extraFiles": [{ "from": "windows", "to": ".", "filter": ["*.cmd"] }],
+  "win": {
+    "target": [{ "target": "nsis", "arch": ["x64"] }],
+    "executableName": "Cloudroom Windows",
+    "signAndEditExecutable": false
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "include": "windows/installer.nsh"
+  }
+}

@@ -65,6 +65,9 @@
   },
   "packageManager": "pnpm@9.15.0",
   "pnpm": {
+    "neverBuiltDependencies": [
+      "better-sqlite3"
+    ],
     "supportedArchitectures": {
       "os": [
         "current"
@@ -75,6 +78,7 @@
       ]
     },
     "overrides": {
+      "better-sqlite3": "13.0.3",
       "zod": "4.3.6"
     },
     "patchedDependencies": {

@@ -2,15 +2,18 @@
   "name": "@cloudroom/desktop",
   "version": "0.43.1",
   "private": true,
-  "description": "macOS and Linux Electron shell for Cloudroom",
+  "description": "Windows, macOS and Linux Electron shell for Cloudroom",
   "main": "dist/main.js",
   "desktopName": "cloudroom-dev.desktop",
   "packageManager": "pnpm@9.15.0",
   "os": [
     "darwin",
-    "linux"
+    "linux",
+    "win32"
   ],
   "scripts": {
+    "dist:windows": "pnpm run prepare-runtime && pnpm run build && node scripts/package-windows.mjs --config electron-builder.windows.json --win nsis --x64 --publish never",
+    "package:windows": "pnpm run prepare-runtime && pnpm run build && node scripts/package-windows.mjs --config electron-builder.windows.json --win --dir --x64 --publish never",
     "build": "node scripts/build.mjs",
     "clean": "rimraf dist release.noindex",
     "install:macos": "node scripts/install-macos.mjs",
