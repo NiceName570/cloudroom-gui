@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   compareVersions,
+  commandOutput,
   formatCommand,
   installationVerification,
   npmGlobalInstallSource,
@@ -12,6 +13,25 @@ import {
 } from "./provider-maintenance-kit.js";
 
 describe("provider maintenance kit", () => {
+  it.runIf(process.platform === "win32")(
+    "probes npm-style Windows command shims in paths with spaces",
+    async () => {
+      const dir = await mkdtemp(path.join(tmpdir(), "cloudroom cli probe "));
+      try {
+        const executable = path.join(dir, "agent.cmd");
+        await writeFile(executable, "@echo off\r\necho agent 2.1.295\r\n");
+        expect(await readCliVersion(executable)).toBe("2.1.295");
+        expect(await commandOutput(executable, ["--version"])).toBe(
+          "agent 2.1.295",
+        );
+        expect(
+          await commandOutput(path.join(dir, "missing.exe"), []),
+        ).toBeNull();
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    },
+  );
   it.skipIf(process.platform === "win32")(
     "reads the version of a CLI that keeps reading stdin until EOF",
     async () => {

@@ -9,10 +9,14 @@ const binary = resolve(process.argv[2]);
 const output = resolve(process.argv[3]);
 await mkdir(output, { recursive: true });
 const port = 49381;
+const serverUrl = "http://127.0.0.1:49382";
 const env = {
   ...process.env,
   ROOM_DATA_DIR: join(output, "data"),
   BB_DESKTOP_OPEN_DEVTOOLS: "0",
+  ROOM_SERVER_URL: serverUrl,
+  ROOM_HOST_DAEMON_PORT: "49383",
+  BB_TELEMETRY: "false",
 };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(
@@ -46,7 +50,7 @@ try {
       .catch(() => []);
     page = pages.find(
       (entry) =>
-        entry.type === "page" && entry.url.startsWith("http://127.0.0.1:"),
+        entry.type === "page" && entry.url.startsWith(serverUrl),
     );
     if (page) break;
     if (child.exitCode !== null) throw new Error(`App exited: ${logs}`);
@@ -96,7 +100,28 @@ try {
     if (JSON.parse(state.result.value).rootChildren > 0) break;
     await delay(500);
   }
-  const details = JSON.parse(state.result.value);
+  let details = JSON.parse(state.result.value);
+  if (process.argv.includes("--local")) {
+    const choice = await send("Runtime.evaluate", {
+      expression: `(() => { const button = Array.from(document.querySelectorAll('button')).find(element => element.textContent.trim() === 'Use local agents on Windows'); if (button) button.click(); return Boolean(button) || localStorage.getItem('cloudroom.setup.dismissed') === 'true'; })()`,
+      returnByValue: true,
+    });
+    assert.equal(choice.result.value, true, "No local-mode entry was available");
+    await delay(500);
+    await send("Page.reload");
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const result = await send("Runtime.evaluate", {
+        expression: `JSON.stringify({title:document.title,text:document.body.innerText,rootChildren:document.querySelector('#root')?.childElementCount,desktopPlatform:window.bbDesktop?.platform,setupDismissed:localStorage.getItem('cloudroom.setup.dismissed'),executionTarget:localStorage.getItem('cloudroom.executionTarget'),setupOpen:Boolean(document.querySelector('[aria-label="Set up Cloudroom"]'))})`,
+        returnByValue: true,
+      });
+      details = JSON.parse(result.result.value);
+      if (details.rootChildren > 0 && !details.setupOpen) break;
+      await delay(500);
+    }
+    assert.equal(details.setupDismissed, "true");
+    assert.equal(details.executionTarget, "local");
+    assert.equal(details.setupOpen, false);
+  }
   await writeFile(join(output, "ui.json"), JSON.stringify(details, null, 2));
   const shot = await send("Page.captureScreenshot", { format: "png" });
   await writeFile(

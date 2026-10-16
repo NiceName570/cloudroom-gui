@@ -21,7 +21,7 @@ import { usePathPickerHost } from "@/hooks/useLocalPathPicker";
 import { useQuickCreateProjectController } from "@/hooks/useQuickCreateProject";
 import { usePromptBoxProviderPreference } from "@/hooks/thread-creation-options/persisted-selection-fields";
 import { booleanLocalStorage } from "@/lib/browser-storage";
-import { MACOS_APP_REGION_NO_DRAG_CLASS, MACOS_WINDOW_DRAG_CLASS } from "@/lib/bb-desktop";
+import { getBbDesktopInfo, MACOS_APP_REGION_NO_DRAG_CLASS, MACOS_WINDOW_DRAG_CLASS } from "@/lib/bb-desktop";
 import { copyTextToClipboard, copyToClipboardWithToast } from "@/lib/clipboard";
 import { fetchWithAppSurface } from "@/lib/app-surface";
 import { useSystemConfig, useSystemProviders } from "@/hooks/queries/system-queries";
@@ -86,7 +86,7 @@ export function Onboarding() {
   const [open, setOpen] = useAtom(openAtom);
   const projects = useSidebarNavigation().data?.projects;
   const account = useCloudroomAccount();
-  const locked = account.isSuccess && !account.data.account;
+  const locked = account.isSuccess && !account.data.account && getBbDesktopInfo()?.platform !== "windows";
   const visible = locked || open || (!dismissed && projects !== undefined && projects.length === 0);
   if (!visible) return null;
   return <Setup locked={locked} close={() => { setDismissed(true); setOpen(false); }} />;
@@ -213,7 +213,7 @@ function Setup({ locked, close }: { locked: boolean; close: () => void }) {
           <div key={step} className={cn("my-auto w-full duration-300 animate-in fade-in-0 slide-in-from-bottom-1", step === 3 ? "max-w-[860px]" : "max-w-[600px]")}>
             {step === 1 && stamped ? <TickStamp key={`${claude}-${codex}`} /> : <BbLogo className="mb-6 size-[72px] -rotate-[5deg]" />}
             <p className="font-serif text-base text-(--ob-muted) italic">Step {step + 1} of 4</p>
-            {step === 0 && <AccountStep email={account.data?.account?.email ?? null} signingIn={account.data?.signingIn === true} next={next} />}
+            {step === 0 && <AccountStep email={account.data?.account?.email ?? null} signingIn={account.data?.signingIn === true} next={next} local={getBbDesktopInfo()?.platform === "windows" ? leave : undefined} />}
             {step === 1 && <AgentStep progress={progress} next={next} stamped={stamped} left={countdown?.left ?? null} choices={choices} setChoices={setChoices} />}
             {step === 2 && <GithubStep progress={progress} next={next} />}
             {step === 3 && <ProjectStep close={leave} />}
@@ -343,7 +343,7 @@ const TickStamp = () => (
   </span>
 );
 
-function AccountStep({ email, signingIn, next }: { email: string | null; signingIn: boolean; next: () => void }) {
+function AccountStep({ email, signingIn, next, local }: { email: string | null; signingIn: boolean; next: () => void; local?: () => void }) {
   const signIn = useCloudroomSignIn();
   const busy = signingIn || signIn.isPending;
   const start = () => { track("account", "started"); signIn.mutate("signIn"); };
@@ -365,6 +365,10 @@ function AccountStep({ email, signingIn, next }: { email: string | null; signing
           <p className="mt-3 text-base text-(--ob-muted)">Use the account you made on cloudroom.dev.</p>
           <div className="mt-8 flex flex-col items-start gap-4">
             <Cta onClick={start}>Sign in with browser <Icon name="ArrowRight" aria-hidden /></Cta>
+            {local && <>
+              <Outline onClick={() => { localStorage.setItem("cloudroom.executionTarget", "local"); local(); }}>Use local agents on Windows</Outline>
+              <Note>Work with your installed agents and local projects. A Cloudroom account is only needed for cloud services.</Note>
+            </>}
             <Note>Already signed in there? You come right back.</Note>
           </div>
         </>

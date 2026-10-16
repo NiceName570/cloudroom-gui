@@ -1,4 +1,10 @@
-import { accessSync, constants, existsSync, lstatSync, statSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  existsSync,
+  lstatSync,
+  statSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, isAbsolute, join } from "node:path";
 
@@ -22,10 +28,37 @@ function isDanglingLink(candidate: string): boolean {
 }
 
 function pathCandidates(cli: string, env: NodeJS.ProcessEnv): string[] {
-  return (env.PATH ?? "")
+  return (env.PATH ?? env.Path ?? "")
     .split(delimiter)
     .filter((dir) => isAbsolute(dir))
-    .map((dir) => join(dir, cli));
+    .flatMap((dir) => executableCandidates(dir, cli));
+}
+
+function executableCandidates(dir: string, cli: string): string[] {
+  if (process.platform !== "win32") return [join(dir, cli)];
+  const modules = join(dir, "node_modules");
+  const architecture = process.arch === "arm64" ? "arm64" : "x64";
+  const native =
+    cli === "claude"
+      ? [join(modules, "@anthropic-ai", "claude-code", "bin", "claude.exe")]
+      : cli === "codex"
+        ? [modules, join(modules, "@openai", "codex", "node_modules")].flatMap(
+            (root) => {
+              const vendor = join(
+                root,
+                "@openai",
+                `codex-win32-${architecture}`,
+                "vendor",
+                `${architecture === "arm64" ? "aarch64" : "x86_64"}-pc-windows-msvc`,
+              );
+              return [
+                join(vendor, "bin", "codex.exe"),
+                join(vendor, "codex", "codex.exe"),
+              ];
+            },
+          )
+        : [];
+  return [join(dir, `${cli}.exe`), ...native, join(dir, `${cli}.com`)];
 }
 
 function codexAppBundlePaths(home: string): string[] {
@@ -54,7 +87,7 @@ export function officialCodexPath(
     "packages",
     "standalone",
     "current",
-    "codex",
+    process.platform === "win32" ? "codex.exe" : "codex",
   );
 }
 
@@ -63,6 +96,9 @@ function fallbackCandidates(cli: string, env: NodeJS.ProcessEnv): string[] {
   const home = homeDir(env);
   const binDirs = [
     join(home, ".local", "bin"),
+    ...(process.platform === "win32"
+      ? [join(env.APPDATA ?? join(home, "AppData", "Roaming"), "npm")]
+      : []),
     "/opt/homebrew/bin",
     "/usr/local/bin",
     "/home/linuxbrew/.linuxbrew/bin",
@@ -80,7 +116,10 @@ function fallbackCandidates(cli: string, env: NodeJS.ProcessEnv): string[] {
           : cli === "grok"
             ? [join(home, ".grok", "bin", "grok")]
             : [];
-  return [...binDirs.map((dir) => join(dir, cli)), ...providerPaths];
+  return [
+    ...binDirs.flatMap((dir) => executableCandidates(dir, cli)),
+    ...providerPaths,
+  ];
 }
 
 export function findCliExecutable(

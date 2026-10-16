@@ -2232,7 +2232,7 @@ describe("bb-app launcher", () => {
     );
     expect(metadata.files).toContain("host-daemon/dist/room-cli");
     expect(metadata.files).toContain("host-daemon/dist/room-cli-chunks");
-    expect(metadata.os).toEqual(["darwin", "linux"]);
+    expect(metadata.os).toEqual(["darwin", "linux", "win32"]);
   });
 
   it("requires the bundled CLI's chunk directory next to host-daemon/dist/room-cli", () => {

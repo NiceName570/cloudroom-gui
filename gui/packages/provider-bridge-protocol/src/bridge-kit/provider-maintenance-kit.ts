@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import semverCompare from "semver/functions/compare.js";
 import semverValid from "semver/functions/valid.js";
 import { z } from "zod";
+import { spawnPortableProcess } from "@cloudroom/process-utils";
 import type {
   ProviderInstallationCommand,
   ProviderInstallationSource,
@@ -51,14 +52,50 @@ export async function commandOutput(
   command: string,
   args: readonly string[],
 ): Promise<string | null> {
-  try {
-    const { stdout, stderr } = await execFileAsync(command, [...args], {
-      timeout: INSTALLATION_CHECK_TIMEOUT_MS,
+  return captureCommand(command, args, INSTALLATION_CHECK_TIMEOUT_MS);
+}
+
+function captureCommand(
+  command: string,
+  args: readonly string[],
+  timeoutMs: number,
+): Promise<string | null> {
+  return new Promise((resolve) => {
+    const child = spawnPortableProcess({
+      command,
+      args: [...args],
+      stdio: ["pipe", "pipe", "pipe"],
     });
-    return `${stdout}\n${stderr}`.trim();
-  } catch {
-    return null;
-  }
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    let settled = false;
+    const finish = (result: string | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(null);
+    }, timeoutMs);
+    const output = (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > 1024 * 1024) {
+        child.kill();
+        finish(null);
+        return;
+      }
+      chunks.push(chunk);
+    };
+    child.stdout?.on("data", output);
+    child.stderr?.on("data", output);
+    child.stdin?.end();
+    child.once("error", () => finish(null));
+    child.once("close", (code) =>
+      finish(code === 0 ? Buffer.concat(chunks).toString("utf8").trim() : null),
+    );
+  });
 }
 
 export function versionFrom(value: string | null): string | null {
@@ -69,16 +106,9 @@ export function versionFrom(value: string | null): string | null {
 }
 
 export async function readCliVersion(command: string): Promise<string | null> {
-  try {
-    const probe = execFileAsync(command, ["--version"], {
-      timeout: CLI_PROBE_TIMEOUT_MS,
-    });
-    probe.child.stdin?.end();
-    const { stdout, stderr } = await probe;
-    return versionFrom(`${stdout}\n${stderr}`);
-  } catch {
-    return null;
-  }
+  return versionFrom(
+    await captureCommand(command, ["--version"], CLI_PROBE_TIMEOUT_MS),
+  );
 }
 
 export function compareVersions(left: string, right: string): number {

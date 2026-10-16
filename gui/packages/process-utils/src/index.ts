@@ -139,6 +139,7 @@ export function spawnPortableProcess(
   request: PortableSpawnRequest,
 ): PortableChildProcess {
   return crossSpawn(request.command, request.args, {
+    windowsHide: true,
     cwd: request.cwd,
     detached: request.detached,
     env: request.env,
@@ -477,7 +478,11 @@ export function sanitizeInheritedChildProcessEnv(
     if (value === undefined) {
       continue;
     }
-    if (key === "NODE_ENV" || key.startsWith("BB_") || key.startsWith("ROOM_")) {
+    if (
+      key === "NODE_ENV" ||
+      key.startsWith("BB_") ||
+      key.startsWith("ROOM_")
+    ) {
       continue;
     }
     sanitizedEnv[key] = value;
