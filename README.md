@@ -22,8 +22,8 @@ The aim is a complete coding workspace: give an agent a task, watch its progress
 | Run PowerShell in the integrated terminal | Real command execution verified through ConPTY |
 | Use `room-cli` from the supplied terminal | Installed CLI verified; no separate Node installation needed to run it |
 | Work with native Windows project paths | Drive paths and UNC paths accepted by validation |
-| Detect installed Codex and Claude Code | Native Windows executables discovered and version probes verified in source |
-| Start local work without Cloudroom sign-in | Implemented; installed-app regression verification in progress |
+| Detect installed Codex and Claude Code | Native discovery verified; both model catalogs loaded through the packaged app |
+| Start local work without Cloudroom sign-in | Packaged app verified; local choice survives page reload |
 | Agent tasks, file edits, worktrees, history, cancellation, and recovery | End-to-end Windows verification in progress |
 | Cloud handoff and computer control | Not yet verified on Windows; do not assume macOS feature parity |
 
@@ -54,7 +54,7 @@ Run `installer.exe` and choose an installation folder. It installs for your user
 ### First use
 
 1. Open **Cloudroom Windows**.
-2. Choose **Use local agents on Windows** for local work, or sign in if you want cloud services. This local option is part of the next build under validation.
+2. In current source builds, choose **Use local agents on Windows** for local work, or sign in if you want cloud services. The original development installer predates this option; the refreshed installer is being validated.
 3. Connect an installed agent in Settings and open a project folder.
 4. Use the integrated PowerShell terminal, or open **Cloudroom Windows Terminal** from Start.
 
@@ -77,6 +77,8 @@ The initial Windows build passed **56 build/typecheck tasks**. Verification incl
 - Packaged SQLite executing a real database query.
 - Offline plugin dependency installation and updates through the bundled runtime, with application resources unchanged.
 - Native Codex and Claude executable discovery, including npm installations in paths containing spaces.
+- Packaged model discovery returned seven Codex models and sixteen Claude models on the verification machine.
+- Local setup dismissal persisted across a real renderer reload.
 
 Windows-specific regression tests are being added as gaps are fixed. Some upstream suites still assume POSIX paths or Unix execute permissions. See [Windows notes](WINDOWS.md) for checks and limitations; see the [checklist](WINDOWS-ROADMAP.md) for the remaining release gates.
 

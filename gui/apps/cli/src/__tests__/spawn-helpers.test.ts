@@ -3,6 +3,7 @@ import { DEFAULT_THREAD_WAIT_POLL_INTERVAL_MS } from "@cloudroom/sdk";
 import {
   buildSpawnEnvironment,
   looksLikePath,
+  resolveSpawnEnvironmentValue,
   requireHostId,
 } from "../commands/thread/spawn.js";
 import {
@@ -78,6 +79,26 @@ describe("accepted thread argument values", () => {
 });
 
 describe("looksLikePath", () => {
+  it.each([
+    "C:\\Users\\developer\\Windows project",
+    "D:\\work\\repo",
+    "\\\\server\\share\\repo",
+    "folder\\repo",
+  ])("preserves Windows workspace path %s", (workspacePath) => {
+    expect(looksLikePath(workspacePath)).toBe(true);
+    expect(resolveSpawnEnvironmentValue(workspacePath)).toBe(workspacePath);
+    expect(
+      buildSpawnEnvironment({
+        defaultPersonalWorkspace: false,
+        hostId: "windows-host",
+        environmentValue: workspacePath,
+      }),
+    ).toEqual({
+      type: "host",
+      hostId: "windows-host",
+      workspace: { type: "unmanaged", path: workspacePath },
+    });
+  });
   it("returns false for bare words", () => {
     expect(looksLikePath("worktree")).toBe(false);
     expect(looksLikePath("docker")).toBe(false);

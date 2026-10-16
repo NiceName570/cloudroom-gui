@@ -19,3 +19,11 @@ The initial full Windows build and typecheck passed 56 Turbo tasks. The terminal
 The packaging wrapper copies the NSIS templates to `.windows-packager/` to stay within NSIS path-length limits when pnpm creates long dependency paths. The packaged app rendered its setup screen with the Windows desktop bridge. The packaged npm audit passed 348 dependency edges and offline install/update checks without modifying application resources. The terminal launcher passed `room-cli --help` through the bundled runtime.
 
 Installation and packaged app results are recorded in the accompanying build verification report.
+
+## Local workflow verification
+
+The Windows-first README is now the fork's default front page. Source builds offer **Use local agents on Windows**, leaving cloud service authentication intact. A packaged-app test selected local mode, reloaded the renderer, and verified that setup stayed dismissed. The same package loaded seven Codex models and sixteen Claude models through its bundled CLI on the verification machine.
+
+Native executable discovery now recognizes supported npm layouts and Windows executable suffixes. Five discovery regression tests pass, and live probes launched Codex 0.163.0 and Claude Code 2.1.295. CLI probe tests passed 41 checks, with four platform-specific skips. A real Windows launcher test verifies extensionless bundled scripts and literal arguments containing spaces and ampersands.
+
+The first project-task demonstration found that the thread CLI treated backslash paths as environment IDs. The parser has been corrected; 39 spawn-helper tests pass, including drive, UNC, and relative Windows paths. Repackaging and end-to-end task verification follow that fix. The original development installer has not yet been replaced by this newer source build.

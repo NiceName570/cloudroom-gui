@@ -16,7 +16,8 @@ The target is a fully functional Windows app with an accurate, clear GitHub show
 
 ## Agents and workflows
 
-- [ ] Discover native Codex and Claude installations and expose actionable health/authentication status.
+- [x] Discover native Codex and Claude installations and load their model catalogs through the packaged app.
+- [ ] Expose and verify actionable agent health/authentication status.
 - [ ] Complete a real local agent task, including a tool execution and file change; verify the result independently.
 - [ ] Verify follow-up messages, cancellation, history persistence, branching/forking, and recovery.
 - [ ] Verify other advertised agents or clearly identify unsupported adapters before release.
