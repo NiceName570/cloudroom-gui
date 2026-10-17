@@ -24,7 +24,7 @@ Before your first browser task, read the full guide: `browser-harness skill`. It
   - First use may need the user once: tick "Allow remote debugging for this browser instance" at `chrome://inspect/#remote-debugging`, then click Allow on the browser's popup. Tell them exactly that.
 - **Cloud threads:** Chromium on the sandbox's virtual screen, with no logins. `room-cli computer-use` sees the same window, so use it for native dialogs and browser menus.
   - The side-panel browser runs on the user's Mac. You can't use it or its logins.
-  - If a site needs the user's login, say so. Ask before using their Mac's browser.
+  - If a site needs the user's login, say so. Ask before using their PC's browser.
 
 ## Rules
 

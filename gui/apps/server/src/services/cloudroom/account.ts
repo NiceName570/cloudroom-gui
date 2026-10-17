@@ -41,7 +41,7 @@ h1{margin:0 0 20px;font-size:clamp(28px,5vw,40px);font-weight:500;letter-spacing
 ${success
     ? '<div class="next open"><div><strong>Head back to Cloudroom</strong><p>Next, connect Claude Code and Codex in the app. You can close this browser tab.</p></div><a class="button" href="cloudroom://open">Open Cloudroom</a></div>'
     : '<div class="next"><strong>Start sign-in again from the Cloudroom app</strong><p>You can close this browser tab.</p></div>'}
-<p class="local">This page is served by Cloudroom on your Mac.</p>
+<p class="local">This page is served by Cloudroom on your PC.</p>
 </main></body></html>`;
 }
 

@@ -134,7 +134,7 @@ describe("MarkdownPreview", () => {
                   items: [
                     {
                       id: "finder",
-                      label: "Open in Finder",
+                      label: "Open in File Explorer",
                       onSelect: openFinder,
                     },
                   ],

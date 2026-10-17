@@ -1255,7 +1255,7 @@ async function applyServerTarget(): Promise<void> {
     if (!attached) {
       await loadStartupError({
         details:
-          "Could not connect to the local Cloudroom server on this Mac. Check that the port is free or that a compatible Cloudroom server is running.",
+          "Could not connect to the local Cloudroom server on this PC. Check that the port is free or that a compatible Cloudroom server is running.",
         logs: "",
         retryable: true,
         title: "Could not connect",
@@ -2461,7 +2461,7 @@ async function runDesktopApp(): Promise<void> {
         return reportDesktopUpdate(currentRuntime.serverUrl, displayVersion(version), installAt);
       },
       install: async () => {
-        desktopLogger.info("Installing the downloaded update: this Mac was idle, or a window asked to restart.");
+        desktopLogger.info("Installing the downloaded update: this PC was idle, or a window asked to restart.");
         await installDownloadedUpdate();
       },
     });

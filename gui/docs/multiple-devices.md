@@ -146,10 +146,10 @@ The Expo request supports `HTTPS_PROXY` and `NO_PROXY`.
 
 ## Point the desktop app at another bb
 
-The desktop app's Server menu lists "This Mac", every bb connect server on the
+The desktop app's Server menu lists "This PC", every bb connect server on the
 account, and a custom URL. When you select a remote server, the app stops
-starting a bb server on this Mac. It starts one again only when you select
-"This Mac".
+starting a bb server on this PC. It starts one again only when you select
+"This PC".
 
 To reach bb connect without a local server, the app enrolls itself once as a
 connect machine. That step needs the local server, so the first switch to a

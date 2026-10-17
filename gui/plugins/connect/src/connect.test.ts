@@ -1694,7 +1694,7 @@ describe("connect plugin", () => {
     await done;
   });
 
-  it("registers this Mac with Cloudroom Connect once the user is signed in", async () => {
+  it("registers this PC with Cloudroom Connect once the user is signed in", async () => {
     const connectRegister = vi.fn(async () => ({
       handle: "k3x9m2p7qa",
       credential: "a".repeat(64),
@@ -1743,7 +1743,7 @@ describe("connect plugin", () => {
     expect(connectRegister).toHaveBeenCalledTimes(1);
   });
 
-  it("does not register again for the same account, and forgets the Mac when signed out", async () => {
+  it("does not register again for the same account, and forgets the PC when signed out", async () => {
     let accountId: string | null = "acc-1";
     const connectRegister = vi.fn(async () => ({
       handle: "k3x9m2p7qa",

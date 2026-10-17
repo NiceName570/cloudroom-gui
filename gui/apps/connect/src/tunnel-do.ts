@@ -61,7 +61,7 @@ export function parseClientProtocolVersion(raw: string | null): number {
 }
 
 const PORT_SHARE_TOO_OLD =
-  "this Mac's Cloudroom is too old for port sharing — update Cloudroom";
+  "this PC's Cloudroom is too old for port sharing — update Cloudroom";
 
 interface PendingHttp {
   resolve: (response: Response) => void;
@@ -192,7 +192,7 @@ export class TunnelDO {
 
   private offlineResponse(): Response {
     return new Response(
-      "cloudroom: this Mac is offline\n",
+      "cloudroom: this PC is offline\n",
       {
         status: 503,
         headers: {

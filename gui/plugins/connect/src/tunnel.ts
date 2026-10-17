@@ -354,7 +354,7 @@ export class ConnectTunnel {
 
   private credentialRejected(statusCode: number): void {
     this.lastError = this.options.onCredentialRejected
-      ? `Cloudroom Connect rejected this Mac's credential (HTTP ${statusCode}); registering again`
+      ? `Cloudroom Connect rejected this PC's credential (HTTP ${statusCode}); registering again`
       : `the gate rejected this Cloudroom server's credential (HTTP ${statusCode}) — ` +
         "pairing was revoked; get a new code from the getbb.app dashboard and re-pair";
     this.options.log.warn(this.lastError);

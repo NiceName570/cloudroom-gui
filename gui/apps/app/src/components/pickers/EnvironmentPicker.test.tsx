@@ -201,7 +201,7 @@ describe("EnvironmentPickerUI Cloudroom checkout menu", () => {
   });
 
   it.each([
-    ["a folder on this Mac", sources, null],
+    ["a folder on this PC", sources, null],
     ["only a GitHub remote", [], "https://github.com/acme/app.git"],
     ["a folder and a GitHub remote", sources, "https://github.com/acme/app.git"],
   ])(

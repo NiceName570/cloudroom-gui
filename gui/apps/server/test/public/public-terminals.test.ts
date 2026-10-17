@@ -938,7 +938,7 @@ describe("public terminal routes", () => {
     });
   });
 
-  it("opens a cloud thread's terminal in its sandbox through the Mac's daemon", async () => {
+  it("opens a cloud thread's terminal in its sandbox through the PC's daemon", async () => {
     const cloudTerminal = vi.fn(async () => ({
       session: "ses_cloud",
       token: "core-token",

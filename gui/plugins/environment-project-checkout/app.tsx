@@ -175,7 +175,7 @@ function CheckoutInputsControl({
           ? []
           : [
               {
-                label: "On this Mac",
+                label: "On this PC",
                 icon: "GitMerge" as const,
                 branches: localBranches,
               },

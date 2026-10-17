@@ -39,7 +39,7 @@ Spawning:
                                    provider's inputs as JSON Schema (null when it takes
                                    none). Required when the provider declares inputs,
                                    refused when it does not
-    --machine <id-or-name>         Run on a machine; local selects this Mac, cloud selects the Rust core (--host is an alias)
+    --machine <id-or-name>         Run on a machine; local selects this PC, cloud selects the Rust core (--host is an alias)
     --request-id <id>              Stable Cloud creation ID; reuse after an unconfirmed submission
     --service-tier <tier>          Service tier: fast, default
     --permission-mode <mode>       Permission mode: accept-edits, auto, or full

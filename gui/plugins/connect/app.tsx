@@ -616,7 +616,7 @@ function PhoneTab({ status }: { status: ConnectStatus }) {
       <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
         Tip: add it to your Home Screen. On iPhone, tap Share, then Add to Home
         Screen. On Android, open the browser menu and tap Install app.
-        {connected ? "" : " Your phone reaches this Mac while Cloudroom is open and the Mac is awake."}
+        {connected ? "" : " Your phone reaches this PC while Cloudroom is open and the PC is awake."}
       </p>
       {status.url !== null ? (
         <div className="flex items-center gap-4 rounded-lg border border-border px-4 py-3">

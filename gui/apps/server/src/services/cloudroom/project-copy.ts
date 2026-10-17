@@ -270,7 +270,7 @@ async function packProject(root: string, scope: "all" | "changed" | "env", archi
     const files = await localFiles(root, "env").catch(() => { throw error; });
     if (files.length) await pack(root, files, archive).catch(() => { throw error; });
     const reason = error instanceof Error ? error.message : String(error);
-    return { files: files.length, partial: `Only the \`.env\` files were copied, because the Mac could not pack the rest: ${reason}`.slice(0, 500) };
+    return { files: files.length, partial: `Only the \`.env\` files were copied, because the PC could not pack the rest: ${reason}`.slice(0, 500) };
   }
 }
 

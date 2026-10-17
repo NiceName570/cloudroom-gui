@@ -20,7 +20,7 @@ describe("SplitButton", () => {
             onSelect: onOpenPreferred,
             content: <span aria-hidden>F</span>,
           }}
-          primaryTooltip="Open in Finder"
+          primaryTooltip="Open in File Explorer"
           secondaryActions={[{ label: "VS Code", onSelect: onOpenOther }]}
           triggerLabel="Choose another app to open workspace"
           triggerTooltip="Choose another app"

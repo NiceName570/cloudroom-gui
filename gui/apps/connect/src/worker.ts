@@ -144,13 +144,13 @@ async function register(request: Request, env: Env): Promise<Response> {
     redirect: "manual",
   }).catch(() => null);
   if (verified?.status === 401 || verified?.status === 403) {
-    return json({ error: "Cloudroom rejected this Mac's sign-in." }, 401);
+    return json({ error: "Cloudroom rejected this PC's sign-in." }, 401);
   }
   const userId = verified?.ok
     ? ((await verified.json().catch(() => null)) as { userId?: unknown } | null)?.userId
     : undefined;
   if (typeof userId !== "string" || !userId) {
-    return json({ error: "Cloudroom could not verify this Mac. Try again soon." }, 503);
+    return json({ error: "Cloudroom could not verify this PC. Try again soon." }, 503);
   }
   const { handle, credential } = await registerServer(env.DB, userId, installId);
   return json({ handle, credential, serverUrl: `https://${handle}.${env.BASE_DOMAIN}` });

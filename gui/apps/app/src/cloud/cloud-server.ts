@@ -146,7 +146,7 @@ class CloudServer {
       for (const thread of this.threads.values())
         void thread.load().catch(() => undefined);
     });
-    appToast.message("Your Mac is offline. Showing your Cloud threads.");
+    appToast.message("Your PC is offline. Showing your Cloud threads.");
   }
 
   private async handle(request: Request, url: URL): Promise<Response> {
@@ -171,7 +171,7 @@ class CloudServer {
         .trim();
       if (!text)
         return json(
-          { message: "Only text messages work while your Mac is off." },
+          { message: "Only text messages work while your PC is off." },
           400,
         );
       await cloudApi.send(thread[1], text);
@@ -188,7 +188,7 @@ class CloudServer {
     }
     if (path === "/api/v1/threads" && request.method === "POST") {
       return json(
-        { message: "Starting a new thread needs your Mac for now." },
+        { message: "Starting a new thread needs your PC for now." },
         503,
       );
     }
@@ -457,7 +457,7 @@ class CloudServer {
           tabs: [],
         },
       );
-    return json({ message: "Not available while your Mac is off." }, 404);
+    return json({ message: "Not available while your PC is off." }, 404);
   }
 
   private async cloudThreadGet(id: string, rest: string): Promise<Response> {
@@ -483,7 +483,7 @@ class CloudServer {
     if (rest === "/share") return json(saved);
     return saved
       ? json(saved)
-      : json({ message: "Not available while your Mac is off." }, 404);
+      : json({ message: "Not available while your PC is off." }, 404);
   }
 }
 

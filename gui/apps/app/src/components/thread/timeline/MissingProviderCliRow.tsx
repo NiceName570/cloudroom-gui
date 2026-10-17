@@ -82,8 +82,8 @@ export function MissingProviderCliRow({
         {status?.installed
           ? `${name} CLI is installed`
           : installing
-            ? `Installing ${name} CLI on this Mac…`
-            : `${name} CLI isn't installed on this Mac`}
+            ? `Installing ${name} CLI on this PC…`
+            : `${name} CLI isn't installed on this PC`}
       </p>
       <div className="flex flex-wrap items-center gap-2 pl-7">
         {hostId &&

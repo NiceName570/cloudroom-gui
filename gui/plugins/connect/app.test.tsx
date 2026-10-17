@@ -75,7 +75,7 @@ describe("connect settings section", () => {
     expect(slot.rpcCalls.some((call) => call.method === "phoneCode")).toBe(false);
   });
 
-  it("shows setup progress and the reason while the Mac registers", async () => {
+  it("shows setup progress and the reason while the PC registers", async () => {
     const slot = renderSlot(
       app.settingsSections[0]!,
       {},

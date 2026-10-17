@@ -44,7 +44,7 @@ function menuArgs(
     reloadWindow,
     selectServer: () => {},
     serverDaemonLogsMenuEnabled: false,
-    servers: [{ checked: true, id: "builtin", name: "This Mac" }],
+    servers: [{ checked: true, id: "builtin", name: "This PC" }],
     setServerUrl: () => {},
     ...overrides,
   };
@@ -170,7 +170,7 @@ describe("application menu", () => {
       menuArgs(() => {}, {
         selectServer,
         servers: [
-          { checked: false, id: "builtin", name: "This Mac" },
+          { checked: false, id: "builtin", name: "This PC" },
           { checked: true, id: "custom", name: "example.com" },
         ],
         setServerUrl,
@@ -196,7 +196,7 @@ describe("application menu", () => {
       menuArgs(() => {}, {
         connectServersSkipReason: "no-credential",
         servers: [
-          { checked: false, id: "builtin", name: "This Mac" },
+          { checked: false, id: "builtin", name: "This PC" },
           {
             checked: true,
             id: "custom",
@@ -209,7 +209,7 @@ describe("application menu", () => {
 
     expect(serverSubmenu.map((item) => item.label ?? `<${item.type}>`)).toEqual(
       [
-        "This Mac",
+        "This PC",
         "old-host.tailnet.ts.net:38886",
         CONNECT_SERVERS_SKIPPED_MENU_LABELS["no-credential"],
         "<separator>",

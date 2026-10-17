@@ -29,7 +29,7 @@ const VISIBLE_REPO_SUGGESTIONS = 5;
 const REPO_FILTERS = [
   { id: "all", label: "All" },
   { id: "github", label: "GitHub" },
-  { id: "mac", label: "Mac" },
+  { id: "mac", label: "PC" },
 ] as const;
 type RepoFilter = (typeof REPO_FILTERS)[number]["id"];
 

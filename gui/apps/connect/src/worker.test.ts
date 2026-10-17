@@ -155,7 +155,7 @@ afterAll(async () => {
 });
 
 describe("Cloudroom Connect relay", () => {
-  it("asks the website who the Mac belongs to before registering it", async () => {
+  it("asks the website who the PC belongs to before registering it", async () => {
     website = () => new MiniflareResponse("no", { status: 403 });
     const rejected = await fetchRelay(`https://${BASE}/api/register`, {
       method: "POST",
@@ -192,7 +192,7 @@ describe("Cloudroom Connect relay", () => {
     expect(api.status).toBe(401);
   });
 
-  it("signs a phone in with one code and relays it to the Mac", async () => {
+  it("signs a phone in with one code and relays it to the PC", async () => {
     const cookie = await signInPhone();
     const response = await fetchRelay(`https://${handle}.${BASE}/api/v1/threads`, {
       headers: { cookie: `${cookie}; theme=dark` },
@@ -235,7 +235,7 @@ describe("Cloudroom Connect relay", () => {
     expect(app.status).toBe(401);
   });
 
-  it("signs every phone out when the Mac asks", async () => {
+  it("signs every phone out when the PC asks", async () => {
     const otherMac = await register("fedcba9876543210fedcba9876543210");
     const otherTunnelResponse = await fetchRelay(`${otherMac.serverUrl}/__tunnel?v=1`, {
       headers: { upgrade: "websocket", authorization: `Bearer ${otherMac.credential}` },
@@ -360,7 +360,7 @@ describe("Cloudroom Connect relay", () => {
     expect(garbage.status).toBe(401);
   });
 
-  it("shows the offline page when the Mac is not connected", async () => {
+  it("shows the offline page when the PC is not connected", async () => {
     const cookie = await signInPhone();
     tunnel.close();
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -369,7 +369,7 @@ describe("Cloudroom Connect relay", () => {
     });
     expect(page.status).toBe(503);
     expect(page.headers.get(OFFLINE_HEADER)).toBe("1");
-    expect(await page.text()).toContain("Your Mac is offline");
+    expect(await page.text()).toContain("Your PC is offline");
   });
 });
 

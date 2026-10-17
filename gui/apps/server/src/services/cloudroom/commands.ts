@@ -869,7 +869,7 @@ class CloudroomService {
   /** Copies logins both ways when the user allowed it (ADRs 0130, 0175). Only the Mac → cloud copy is awaited. */
   private async syncLogins(cloudChanged = false): Promise<void> {
     if (!await this.sandboxMode() || await copyLogins(this.deps) !== true) return;
-    void this.sandboxes.copyCloudLogins(cloudChanged).catch(error => this.warn("Cloud logins could not be copied to this Mac", error));
+    void this.sandboxes.copyCloudLogins(cloudChanged).catch(error => this.warn("Cloud logins could not be copied to this PC", error));
     await this.sandboxes.copyMacLogins(false, await copyMacGithub(this.deps)).catch(error => this.warn("Logins could not be copied to cloud sandboxes", error));
   }
 
@@ -918,7 +918,7 @@ class CloudroomService {
     if (sandbox) {
       if (action === "token" && code) await this.sandboxes.saveLogin("claude", JSON.stringify({ token: code, ...(state ? { plan: state } : {}) }));
       else if (action === "key" && code) await this.sandboxes.saveLogin("claude", JSON.stringify({ apiKey: code }));
-      else if (action === "login" || action === "complete") throw new ApiError(409, "claude_auth_unsupported", "Cloud sandboxes connect Claude with a one-year token from this Mac. Use Connect Claude.");
+      else if (action === "login" || action === "complete") throw new ApiError(409, "claude_auth_unsupported", "Cloud sandboxes connect Claude with a one-year token from this PC. Use Connect Claude.");
       if ((action === "token" || action === "key") && code) {
         void this.syncLogins(true);
         if ((await this.savedConnection())?.token) await this.vmClaudeAuth(action, requestId, code, state).catch(error => this.warn("Claude could not be connected on the VM", error));
@@ -942,11 +942,11 @@ class CloudroomService {
       // Signing in copies this Mac's Cursor login; clicking is the consent, even when automatic copying is off.
       if (action === "login") {
         const login = await macCursorLogin();
-        if (!login) throw new ApiError(409, "cursor_auth_required", "Cursor is not signed in on this Mac. Run `cursor-agent login` in your terminal, then click Sign in with Cursor again, or use a Cursor API key.");
+        if (!login) throw new ApiError(409, "cursor_auth_required", "Cursor is not signed in on this PC. Run `cursor-agent login` in your terminal, then click Sign in with Cursor again, or use a Cursor API key.");
         await this.sandboxes.saveLogin("cursor", login);
         return { ...sandbox, state: "connected" as const };
       }
-      if (action !== "key") return sandbox.state === "connected" ? sandbox : { ...sandbox, message: "Cloud threads use this Mac's Cursor login, or a Cursor user API key." };
+      if (action !== "key") return sandbox.state === "connected" ? sandbox : { ...sandbox, message: "Cloud threads use this PC's Cursor login, or a Cursor user API key." };
       const key = apiKey?.trim() ?? "";
       if (!/^[\x21-\x7e]{1,4096}$/.test(key)) throw new ApiError(400, "invalid_request", "Enter a valid Cursor API key.");
       await this.sandboxes.saveLogin("cursor", JSON.stringify({ apiKey: key }));
@@ -981,7 +981,7 @@ class CloudroomService {
       if (action === "login") {
         if (await copyLogins(this.deps) !== true) {
           reportAgentConnect("codex", "failed", { code: "copy_logins_off" });
-          throw new ApiError(409, "codex_auth_unsupported", "Cloud sandboxes use this Mac's Codex login. Turn on \"Auth my agents in the cloud automatically\" in Settings → Cloud, then try again.");
+          throw new ApiError(409, "codex_auth_unsupported", "Cloud sandboxes use this PC's Codex login. Turn on \"Auth my agents in the cloud automatically\" in Settings → Cloud, then try again.");
         }
         // Signed out or expired here: sign in on this Mac first, then the next status check copies the new login.
         if (await hasMacCodexLogin() && !await macCodexLoginExpired()) {
@@ -1898,7 +1898,7 @@ class CloudroomService {
         ]);
         saveBinding(this.deps.db, threadId, { sessionId: started.sessionId, error: null });
         saved = binding(this.deps.db, threadId)!;
-        const copying = copy?.clone && copy.repository ? `Cloning ${copy.repository.replace("https://github.com/", "")}` : copy?.copyAll ? "Copying project from your Mac" : null;
+        const copying = copy?.clone && copy.repository ? `Cloning ${copy.repository.replace("https://github.com/", "")}` : copy?.copyAll ? "Copying project from your PC" : null;
         const files: StartStep[] = copying ? [{ key: "files", text: copying, status: "started" }] : [];
         const forkCode: StartStep[] = started.code ? [{ key: "fork", text: "Copying the source thread's code", status: "started" }] : [];
         this.progress(threadId, [{ key: "agent", status: "completed" }, ...files, ...forkCode], "completed");

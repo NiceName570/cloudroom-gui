@@ -260,7 +260,7 @@ function VariablesCard({
         <>
           <div className="flex items-center justify-between gap-3 border-t border-border bg-primary/5 px-4 py-2">
             <p className="text-xs text-foreground">
-              <span className="font-semibold">{missing.length} more on this Mac</span>
+              <span className="font-semibold">{missing.length} more on this PC</span>
               <span className="text-subtle-foreground"> · from your shell</span>
             </p>
             <Button size="sm" disabled={locked} onClick={() => importKeys.mutate(missing)}>
@@ -367,11 +367,11 @@ function SkillsCard() {
     >
       {!data ? (
         <p role={skills.isError ? "alert" : "status"} className="border-t border-border px-4 py-3 text-xs text-subtle-foreground">
-          {skills.isError ? errorText(skills.error) : "Looking for skills on this Mac…"}
+          {skills.isError ? errorText(skills.error) : "Looking for skills on this PC…"}
         </p>
       ) : !all.length ? (
         <p className="border-t border-border px-4 py-3 text-xs text-subtle-foreground">
-          No skills on this Mac yet. Add them to <code>~/.agents/skills</code>.
+          No skills on this PC yet. Add them to <code>~/.agents/skills</code>.
         </p>
       ) : (
         <>
@@ -445,14 +445,14 @@ function McpCard({ inCloud, onSaved }: { inCloud: string[]; onSaved: (data: Clou
     if (names.length) change.mutate({ names, cloud });
   };
   return (
-    <Card icon="Plug02" title="MCP servers" description="Your Mac's MCP servers from Claude Code and Codex. Click one to add it to every new cloud thread.">
+    <Card icon="Plug02" title="MCP servers" description="Your PC's MCP servers from Claude Code and Codex. Click one to add it to every new cloud thread.">
       {!mac.data ? (
         <p role={mac.isError ? "alert" : "status"} className="border-t border-border px-4 py-3 text-xs text-subtle-foreground">
-          {mac.isError ? errorText(mac.error) : "Looking for MCP servers on this Mac…"}
+          {mac.isError ? errorText(mac.error) : "Looking for MCP servers on this PC…"}
         </p>
       ) : !servers.length ? (
         <p className="border-t border-border px-4 py-3 text-xs text-subtle-foreground">
-          No MCP servers on this Mac yet. Add one with <code>claude mcp add --scope user</code>.
+          No MCP servers on this PC yet. Add one with <code>claude mcp add --scope user</code>.
         </p>
       ) : (
         <>
@@ -461,11 +461,11 @@ function McpCard({ inCloud, onSaved }: { inCloud: string[]; onSaved: (data: Clou
               server.macOnly ? (
                 <span
                   key={server.name}
-                  title="It runs a program or uses a folder that only this Mac has."
+                  title="It runs a program or uses a folder that only this PC has."
                   className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2.5 py-1 font-mono text-xs text-subtle-foreground/60"
                 >
                   {server.name}
-                  <span className="font-sans text-2xs">· Mac only</span>
+                  <span className="font-sans text-2xs">· PC only</span>
                 </span>
               ) : (
                 <button
@@ -486,7 +486,7 @@ function McpCard({ inCloud, onSaved }: { inCloud: string[]; onSaved: (data: Clou
               ),
             )}
           </div>
-          {/* Servers that use OAuth need one sign-in for the cloud; the Mac's own login stays on the Mac. */}
+          {/* Servers that use OAuth need one sign-in for the cloud; the PC's own login stays on the PC. */}
           {needSignIn.map((server) => (
             <div key={server.name} className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5">
               <div className="flex min-w-0 items-center gap-2.5 text-xs">
@@ -654,7 +654,7 @@ function SetupScriptCard({ setup, keys, onSave }: { setup: string; keys: string[
     <Card icon="Terminal" title="Setup script" description="Runs once in each new cloud sandbox, in the background. Output: /var/log/cloudroom/setup.log">
       {clis.length > 0 && (
         <div className="border-t border-border px-4 py-3">
-          <p className="mb-2 text-xs text-subtle-foreground">Add a CLI from your Mac. A click adds its Linux install lines below.</p>
+          <p className="mb-2 text-xs text-subtle-foreground">Add a CLI from your PC. A click adds its Linux install lines below.</p>
           <div className="flex flex-wrap gap-1.5">
             {clis.map((cli) => {
               const added = script.includes(cli.install);

@@ -28,8 +28,8 @@ export function ProjectCopyNotice({ thread }: { thread: Thread }) {
       : cloning
         ? ["Cloning from GitHub", "New Cloud project"]
         : progress.total
-          ? ["Copying from your Mac", `${megabytes(progress.completed)} of ${megabytes(progress.total)} MB${progress.secondsLeft === undefined ? "" : ` · ${timeLeft(progress.secondsLeft)}`}`]
-          : ["Preparing files on your Mac", "New Cloud project"];
+          ? ["Copying from your PC", `${megabytes(progress.completed)} of ${megabytes(progress.total)} MB${progress.secondsLeft === undefined ? "" : ` · ${timeLeft(progress.secondsLeft)}`}`]
+          : ["Preparing files on your PC", "New Cloud project"];
     return (
       <PromptStackCard ariaLabel="Project copy progress" className="ml-auto mr-3 w-fit max-w-[calc(100%-1.5rem)] overflow-hidden sm:mr-4">
         <div role="status" className="flex min-w-0 items-center gap-2.5 px-3 py-2 text-sm">

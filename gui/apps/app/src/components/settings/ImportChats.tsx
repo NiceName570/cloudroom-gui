@@ -51,11 +51,11 @@ export function ImportChats({ onDone, empty }: { onDone?: () => void; empty?: Re
   const [days, setDays] = useState<number | null>(30);
   const [off, setOff] = useState<Set<Harness>>(new Set());
 
-  if (sessions.isPending) return <p className="text-sm text-(--ic-muted)" style={PALETTE}>Looking for chats on this Mac…</p>;
+  if (sessions.isPending) return <p className="text-sm text-(--ic-muted)" style={PALETTE}>Looking for chats on this PC…</p>;
   if (sessions.error) return <p role="alert" className="text-sm text-destructive">{sessions.error.message}</p>;
   const list = sessions.data.sessions;
   const apps = APPS.filter(([id]) => list.some((session) => session.harness === id));
-  if (!apps.length) return empty ?? <p className="text-sm text-(--ic-muted)" style={PALETTE}>No new agent chats on this Mac.</p>;
+  if (!apps.length) return empty ?? <p className="text-sm text-(--ic-muted)" style={PALETTE}>No new agent chats on this PC.</p>;
 
   const recent = list.filter((session) => days === null || Date.now() - session.updatedAt < days * DAY_MS);
   const picked = apps.filter(([id]) => !off.has(id));
@@ -79,7 +79,7 @@ export function ImportChats({ onDone, empty }: { onDone?: () => void; empty?: Re
     </DropdownMenuItem>
   ));
   const start = () => {
-    if (!localHostId) return appToast.error("This Mac is not connected yet. Try again in a moment.");
+    if (!localHostId) return appToast.error("This PC is not connected yet. Try again in a moment.");
     importSessions.mutate({ hostId: localHostId, sessions: chosen.map(({ harness, id }) => ({ harness, id })) }, {
       onSuccess: ({ imported, skipped }) => {
         appToast.success(`Imported ${imported.length} chat${imported.length === 1 ? "" : "s"}`);

@@ -98,10 +98,10 @@ function AccountTile({
   const [editing, setEditing] = useState(false);
   const local = account.id === LOCAL;
   const fallback =
-    account.email ?? (local ? "This Mac" : `Account ${index + 1}`);
+    account.email ?? (local ? "This PC" : `Account ${index + 1}`);
   const name = account.name ?? fallback;
   const detail = [
-    local && account.email ? "This Mac" : null,
+    local && account.email ? "This PC" : null,
     account.name ? account.email : null,
     account.plan,
   ]

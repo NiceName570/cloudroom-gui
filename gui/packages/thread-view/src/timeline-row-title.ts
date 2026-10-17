@@ -460,7 +460,7 @@ function mapExecutionTitle(row: TimelineExecutionWorkRow): TimelineTitle {
   }
   const badges = badgeDecorations(row);
   const onMac = isCommand && /\b(room-cli|cloudroom) mac (run|pull|push)\b/.test(content);
-  const ran = isCommand ? (onMac ? "Ran on your Mac:" : "Ran") : "Ran tool";
+  const ran = isCommand ? (onMac ? "Ran on your PC:" : "Ran") : "Ran tool";
   switch (status) {
     case "waiting":
       return makeTitle({
@@ -485,7 +485,7 @@ function mapExecutionTitle(row: TimelineExecutionWorkRow): TimelineTitle {
     case "pending":
       return makeTitle({
         segments: [
-          segment(onMac ? "Running on your Mac:" : isCommand ? "Running" : "Running tool:", { shimmer: true }),
+          segment(onMac ? "Running on your PC:" : isCommand ? "Running" : "Running tool:", { shimmer: true }),
           segment(content, { em: true, truncate: true }),
         ],
         decorations: [

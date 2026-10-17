@@ -739,12 +739,12 @@ function FilePreviewHeader({
                       "shrink-0 text-muted-foreground hover:bg-state-hover hover:text-foreground",
                     )}
                     onClick={() => onRevealInFinder(copyPath)}
-                    aria-label="Open in Finder"
+                    aria-label="Open in File Explorer"
                   >
                     <Icon name="FolderOpen" aria-hidden />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Open in Finder</TooltipContent>
+                <TooltipContent side="bottom">Open in File Explorer</TooltipContent>
               </Tooltip>
             ) : null}
           </TooltipProvider>

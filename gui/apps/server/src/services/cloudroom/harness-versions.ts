@@ -36,7 +36,7 @@ export function startClaudeVersionSync(deps: AppDeps, vm: () => Promise<Cloudroo
     try {
       const result = await (await vm()).matchClaudeVersion(version);
       const problem = result.error ? `${result.state}: ${result.error}` : undefined;
-      if (problem && problem !== reported) deps.logger?.warn({ target: version, state: result.state, error: result.error }, "Cloud Claude Code version could not match this Mac");
+      if (problem && problem !== reported) deps.logger?.warn({ target: version, state: result.state, error: result.error }, "Cloud Claude Code version could not match this PC");
       reported = problem;
     } catch {
       return;

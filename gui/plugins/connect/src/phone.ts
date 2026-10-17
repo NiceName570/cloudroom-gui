@@ -93,7 +93,7 @@ export class PhoneRelay {
     );
     if (response.status === 401) {
       void this.check(true);
-      throw new Error("Cloudroom Connect is setting up this Mac again. Try again in a moment.");
+      throw new Error("Cloudroom Connect is setting up this PC again. Try again in a moment.");
     }
     if (!response.ok) {
       throw new Error(`Cloudroom Connect returned HTTP ${response.status}.`);

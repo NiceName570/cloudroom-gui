@@ -80,7 +80,7 @@ export function codexLoginFailure(output: string): string {
     return last ? `Codex sign-in failed: ${last}` : "Codex sign-in did not finish. Click Connect to try again.";
   }
   const config = join(process.env.CODEX_HOME || join(homedir(), ".codex"), "config.toml");
-  return `Codex on this Mac only allows API-key login, but Cloudroom needs ChatGPT sign-in. Remove \`forced_login_method = "api"\` from ${config}, then click Connect again. If the file is locked, run \`chflags nouchg ${config}\` first.`;
+  return `Codex on this PC only allows API-key login, but Cloudroom needs ChatGPT sign-in. Remove \`forced_login_method = "api"\` from ${config}, then click Connect again. If the file is locked, run \`chflags nouchg ${config}\` first.`;
 }
 
 type MacCodexLogin = { child: ChildProcess; url: string | null; error: string | null; done: boolean };
@@ -96,7 +96,7 @@ export function startMacCodexLogin(): MacCodexLogin {
   child.stderr?.on("data", read);
   child.on("error", (error: NodeJS.ErrnoException) => {
     run.done = true;
-    run.error = error.code === "ENOENT" ? "Codex is not installed on this Mac. Install it with `npm i -g @openai/codex`, then click Connect again." : `Codex sign-in could not start: ${error.message}`;
+    run.error = error.code === "ENOENT" ? "Codex is not installed on this PC. Install it with `npm i -g @openai/codex`, then click Connect again." : `Codex sign-in could not start: ${error.message}`;
   });
   // A cancel or the 10-minute timeout kills Codex (code null); only a real exit has an error worth showing.
   child.on("exit", code => { run.done = true; if (code !== 0) run.error ??= codexLoginFailure(code === null ? "" : output); });
@@ -670,7 +670,7 @@ export class SandboxDirectory {
   async setMacMcp(names: string[], cloud: boolean): Promise<CloudEnvironment> {
     if (!cloud) return this.environment({ action: "mcp", servers: {}, remove: names });
     const servers = Object.fromEntries((await macMcpServers()).flatMap(({ name, server }) => server && names.includes(name) ? [[name, server]] : []));
-    if (!Object.keys(servers).length) throw new CloudroomError("Those MCP servers only work on this Mac.", 400);
+    if (!Object.keys(servers).length) throw new CloudroomError("Those MCP servers only work on this PC.", 400);
     return this.environment({ action: "mcp", servers, remove: [] });
   }
   /** Copies edits to this Mac's MCP servers, such as a new key, to the ones already in the cloud. At most once a minute;

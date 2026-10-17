@@ -30,7 +30,7 @@ export function importBbThreads(deps: AppDeps, hostId: string): Promise<BbImport
 }
 
 async function run(deps: AppDeps, hostId: string): Promise<BbImportResult> {
-  if (!existsSync(BB_DB)) throw new ApiError(404, "bb_not_installed", "BB is not installed on this Mac.");
+  if (!existsSync(BB_DB)) throw new ApiError(404, "bb_not_installed", "BB is not installed on this PC.");
   requireNonDestroyedHostWithStatus(deps, hostId);
   assertUsableHostId(deps, { hostId });
   await deps.providerRegistry.whenRegistrationsSettled();

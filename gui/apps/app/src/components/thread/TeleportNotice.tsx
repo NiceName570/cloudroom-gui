@@ -23,7 +23,7 @@ const LOCAL_STEPS: [TeleportLocalStep, string][] = [
   ["stopping", "Stop cloud agent"],
   ["downloading", "Download chat"],
   ["copying", "Copy code"],
-  ["switching", "Switch to Mac"],
+  ["switching", "Switch to PC"],
 ];
 
 export function TeleportLocalNotice({ step = "stopping" }: { step?: TeleportLocalStep }) {

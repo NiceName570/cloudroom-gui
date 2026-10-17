@@ -61,8 +61,8 @@ export const OFFLINE_HEADER = "x-cloudroom-offline";
 export function offlinePage(lastSeenAt: number | null): Response {
   const lastSeen = lastSeenAt === null ? "" : ` It was last online ${ago(lastSeenAt)}.`;
   const response = page(
-    `<h1>Your Mac is offline</h1>
-     <p>Open Cloudroom on your Mac and keep it awake.${escapeHtml(lastSeen)}</p>
+    `<h1>Your PC is offline</h1>
+     <p>Open Cloudroom on your PC and keep it awake.${escapeHtml(lastSeen)}</p>
      <p class="note">This page retries by itself.</p>
      <button type="button" onclick="location.reload()">Retry now</button>`,
     503,

@@ -149,7 +149,7 @@ function KeepAwakeSettings() {
           </h3>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
             Keep selected Macs and their screens awake while Cloudroom is running.
-            Closing the lid or choosing Sleep still sleeps the Mac.
+            Closing the lid or choosing Sleep still sleeps the PC.
           </p>
         </div>
         <Switch

@@ -399,7 +399,7 @@ function AccountChip({
             className="flex items-center gap-2"
           >
             <span className="min-w-0 flex-1 truncate">
-              {accountName(account) ?? "This Mac"}
+              {accountName(account) ?? "This PC"}
             </span>
             <Icon
               name="Check"

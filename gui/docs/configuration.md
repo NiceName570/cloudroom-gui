@@ -213,7 +213,7 @@ The builtin Keep Awake plugin has one autosaving configuration page with an
 enable switch and an all-or-selected host picker. On selected macOS hosts it
 runs `/usr/bin/caffeinate -d -i -s -w <worker-pid>` while enabled, keeping the
 display and system awake while bb is running (`-s` applies on power only).
-Closing a laptop lid or choosing Sleep manually still sleeps the Mac. Configure it from an agent or
+Closing a laptop lid or choosing Sleep manually still sleeps the PC. Configure it from an agent or
 terminal with:
 
 ```sh
@@ -303,12 +303,12 @@ provider new threads use when neither the caller nor the project chose one
 `bb settings general providerOrder '["claude-code","codex"]'` and
 `bb settings general defaultProviderId claude-code` (or `null`).
 
-Each provider row also shows its login on this Mac and in the Cloud (Log in or
+Each provider row also shows its login on this PC and in the Cloud (Log in or
 Connect when missing), its CLI version, the Auto-update switch
 (`providerAutoUpdate`), and its update status (Update, Retry, or a check).
 Agents that can be installed but are not appear under "Not installed" with an
 Install button. Settings → Updates covers Cloudroom itself and other machines'
-CLIs; it links here for this Mac's agents.
+CLIs; it links here for this PC's agents.
 
 The "Collapse finished turns" switches in Settings → Providers choose, per
 provider, how a finished turn appears in the thread timeline. Collapsed, the
@@ -783,7 +783,7 @@ It is written from the first message alongside the name, then rewritten after ev
 Settings → Thread purpose turns it off (`threadPurpose.enabled`, on by default), picks the model
 (`threadPurpose.model`), and sets reasoning effort (`threadPurpose.reasoningEffort`, default medium).
 The default model is Haiku 5.5 on Claude Code, falling back to GPT-6 Luna on Codex. Codex-only users get GPT-6 Luna.
-With neither signed in on this Mac, no purposes are written.
+With neither signed in on this PC, no purposes are written.
 `room-cli thread show` prints it.
 
 ### Sidebar footer
@@ -848,7 +848,7 @@ dropdown switches between them.
 
 Once a Claude account is added, the machine's own login stays listed but can't
 be picked, because Cloud needs a one-year token. **Add Terminal login** adds it as an
-account, labeled with the Mac's email, and selects it. The selected Claude account becomes the Cloud Claude
+account, labeled with the PC's email, and selects it. The selected Claude account becomes the Cloud Claude
 login through `POST /api/v1/cloudroom/account/claude/token`. That route also asks
 awake Cloud Claude sessions to sleep once idle, so their next message restarts
 Claude with the new login. Asleep sandboxes are not woken.

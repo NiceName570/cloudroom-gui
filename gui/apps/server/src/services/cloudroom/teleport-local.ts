@@ -130,7 +130,7 @@ export async function copyToMac(deps: AppDeps, threadId: string): Promise<{ bran
     throw new ApiError(409, "copy_unavailable", "Copy to Mac needs a started cloud thread.");
   const environment = await localEnvironment(deps, thread);
   if (await git(environment.path, ["rev-parse", "--git-dir"]) === null)
-    throw new ApiError(409, "copy_unavailable", "This project's folder on this Mac is not a Git repository.");
+    throw new ApiError(409, "copy_unavailable", "This project's folder on this PC is not a Git repository.");
   const client = await cloudroom(deps).teleportClient(threadId);
   const cloud = await client.sessionWorkspace(saved.sessionId);
   const folder = await mkdtemp(join(tmpdir(), "cloudroom-copy-"));
@@ -157,7 +157,7 @@ export async function copyToMac(deps: AppDeps, threadId: string): Promise<{ bran
       catch (error) {
         const reason = error instanceof Error && "stderr" in error ? String(error.stderr).trim() : "";
         throw new ApiError(409, "copy_unavailable", /checked out|rejected|non-fast-forward/.test(reason)
-          ? `Your Mac's ${branch} is checked out or has other commits. Switch branches or rename it, then retry.`
+          ? `Your PC's ${branch} is checked out or has other commits. Switch branches or rename it, then retry.`
           : `The branch could not be copied: ${reason || "git fetch failed"}`);
       }
       return { branch };

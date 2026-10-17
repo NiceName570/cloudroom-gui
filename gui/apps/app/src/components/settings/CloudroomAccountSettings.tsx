@@ -106,14 +106,14 @@ function MacAccessRow() {
   return <div className={SETTINGS_CARD_CLASS}>
     <div className={SETTINGS_CARD_ROW_CLASS}>
       <div className="min-w-0 flex-1">
-        <p className="text-foreground">Mac access</p>
+        <p className="text-foreground">PC access</p>
         <p className="text-xs text-subtle-foreground/75">{current.description}</p>
       </div>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" aria-label={`Mac access: ${current.label}`} disabled={saving}>{current.label}<Icon name="ChevronDown" className="text-muted-foreground" aria-hidden /></Button>
+          <Button variant="outline" size="sm" aria-label={`PC access: ${current.label}`} disabled={saving}>{current.label}<Icon name="ChevronDown" className="text-muted-foreground" aria-hidden /></Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" mobileTitle="Mac access" className="w-72 p-1.5"><MacAccessMenuItems current={current} select={select} /></DropdownMenuContent>
+        <DropdownMenuContent align="end" mobileTitle="PC access" className="w-72 p-1.5"><MacAccessMenuItems current={current} select={select} /></DropdownMenuContent>
       </DropdownMenu>
     </div>
   </div>;

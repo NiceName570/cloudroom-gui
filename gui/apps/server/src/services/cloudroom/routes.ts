@@ -78,7 +78,7 @@ export function installCloudroomRoutes(app: Hono, deps: AppDeps): void {
   });
   app.get("/api/v1/cloudroom/connect", async context => context.json(await connectAccount(deps)));
   app.post("/api/v1/cloudroom/connect", async context => {
-    if (getGateAuthKind(context) !== null) return context.json({ message: "Register from the Mac, not remotely." }, 403);
+    if (getGateAuthKind(context) !== null) return context.json({ message: "Register from the PC, not remotely." }, 403);
     return context.json(await registerConnect(deps));
   });
   app.post("/api/v1/cloudroom/shares/continue", async context => {
@@ -224,7 +224,7 @@ export function installCloudroomRoutes(app: Hono, deps: AppDeps): void {
     const { names } = z.object({ names: z.array(z.string()).min(1).max(100) }).strict().parse(await context.req.json());
     const found = await macVariables();
     const variables = Object.fromEntries(names.flatMap(name => found[name] ? [[name, found[name]]] : []));
-    if (!Object.keys(variables).length) throw new ApiError(404, "mac_variables_missing", "Those variables are no longer set in your shell on this Mac.");
+    if (!Object.keys(variables).length) throw new ApiError(404, "mac_variables_missing", "Those variables are no longer set in your shell on this PC.");
     return context.json(await environment({ action: "set", variables }));
   });
   // Skills from this Mac that every new cloud thread gets. A change saves at once; the upload runs in the background.

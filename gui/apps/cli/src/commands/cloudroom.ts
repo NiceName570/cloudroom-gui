@@ -46,7 +46,7 @@ export function registerVmCommands(program: Command, getUrl: () => string): void
       if (result.truncated) process.stderr.write("Output exceeded 16 MiB and was truncated.\n");
       process.exitCode = result.code ?? 1;
     }));
-  vm.command("pull <vm-path> [local-folder]").description("Copy a VM or sandbox file or folder to this Mac (default: current folder)")
+  vm.command("pull <vm-path> [local-folder]").description("Copy a VM or sandbox file or folder to this PC (default: current folder)")
     .option(...THREAD_OPTION)
     .action(action(async (source: string, target = ".", options: VmTarget = {}) => {
       const archive = await runOnVm(getUrl(), options, `p=${quote(source)}; cd -- "$(dirname -- "$p")" && tar -czf - -- "$(basename -- "$p")"`);
@@ -58,7 +58,7 @@ export function registerVmCommands(program: Command, getUrl: () => string): void
       });
       console.log(JSON.stringify({ copied: source, to: target }));
     }));
-  vm.command("push <local-path> [vm-folder]").description("Copy a file or folder from this Mac to the VM or sandbox (default: agent home)")
+  vm.command("push <local-path> [vm-folder]").description("Copy a file or folder from this PC to the VM or sandbox (default: agent home)")
     .option(...THREAD_OPTION)
     .action(action(async (source: string, target = "~", options: VmTarget = {}) => {
       const { stdout } = await promisify(execFile)("tar", ["--no-xattrs", "-czf", "-", "-C", dirname(source), "--", basename(source)],
@@ -80,7 +80,7 @@ export function registerImportCommands(program: Command, getUrl: () => string): 
       if (!result.imported.length && !result.skipped.length) console.log("No open BB threads found.");
     }));
   for (const [command, harness, app] of [["claude-code", "claude-code", "Claude Code"], ["codex", "codex", "Codex"], ["pi", "pi", "Pi"], ["hermes", "acp-hermes-agent", "Hermes Agent"]] as const) {
-    group.command(command).description(`Copy recent ${app} chats from this Mac into idle Local threads with their messages.${harness === "acp-hermes-agent" ? " Text only: the agent reads the old messages instead of resuming the session." : ""} Sends no prompts; ${app} is never changed.`)
+    group.command(command).description(`Copy recent ${app} chats from this PC into idle Local threads with their messages.${harness === "acp-hermes-agent" ? " Text only: the agent reads the old messages instead of resuming the session." : ""} Sends no prompts; ${app} is never changed.`)
       .option("--days <days>", "Only chats active in the last N days", "30")
       .option("--dry-run", "List the chats without importing them")
       .option("--json", "Print JSON")
@@ -187,8 +187,8 @@ export function registerCloudCommands(program: Command, getUrl: () => string): v
       if (!outputJson(options, { ok: true })) console.log(name === "logout" ? "Signed out of this app. Cloud agents keep running." : "Sign-in cancelled.");
     }));
   }
-  group.command("teleport <thread-id>").description("Move a local Codex, Pi, Claude Code, or opencode thread to Cloud without changing its conversation. Checks first that Cloud can run the same model and effort. Use --to-local to bring a Cloud Codex, Pi, Claude Code, opencode, or Cursor thread back to this Mac")
-    .option("--to-local", "Move a Cloud thread back to this Mac with its conversation and code changes")
+  group.command("teleport <thread-id>").description("Move a local Codex, Pi, Claude Code, or opencode thread to Cloud without changing its conversation. Checks first that Cloud can run the same model and effort. Use --to-local to bring a Cloud Codex, Pi, Claude Code, opencode, or Cursor thread back to this PC")
+    .option("--to-local", "Move a Cloud thread back to this PC with its conversation and code changes")
     .option("--cancel", "Cancel before cloud execution starts")
     .option("--status", "Read transfer progress without changing it")
     .option("--model <model>", "Run in Cloud on this model instead (requires --reasoning)")
@@ -198,7 +198,7 @@ export function registerCloudCommands(program: Command, getUrl: () => string): v
       const sdk = createCliBbSdk(getUrl());
       if (options.toLocal) {
         const moved = await sdk.cloudroom.teleportLocal(threadId);
-        if (!outputJson(options, moved)) console.log(`Moved to this Mac.${moved.conflicts ? ` ${moved.conflicts} changed files were kept in both versions; cloud copies are in .cloudroom/teleport/.` : ""}`);
+        if (!outputJson(options, moved)) console.log(`Moved to this PC.${moved.conflicts ? ` ${moved.conflicts} changed files were kept in both versions; cloud copies are in .cloudroom/teleport/.` : ""}`);
         return;
       }
       if (Boolean(options.model) !== Boolean(options.reasoning)) throw new Error("Use --model and --reasoning together.");

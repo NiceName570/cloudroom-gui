@@ -121,7 +121,7 @@ function machineCodeErrorText(
 ): string {
   switch (error.code) {
     case "not_paired":
-      return "no old getbb.app pairing on this Mac";
+      return "no old getbb.app pairing on this PC";
     case "machine_limit":
       return `this account has reached its connect machine limit — revoke a device you no longer use at ${dashboardUrl}, then try again`;
     case "network":
@@ -349,7 +349,7 @@ export function registerConnectCli(args: {
           const parsed = parseFlags(argv.slice(1));
           validateFlags(parsed, { boolean: ["json"] });
           if (!legacy.status().paired) {
-            return { exitCode: 1, stderr: "no old getbb.app pairing on this Mac\n" };
+            return { exitCode: 1, stderr: "no old getbb.app pairing on this PC\n" };
           }
           const result = await legacy.listAccountServers();
           if (parsed.flags.has("json")) {

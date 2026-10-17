@@ -158,7 +158,7 @@ ${DESKTOP_DIALOG_BASE_CSS}
   </style>
 </head>
 <body>
-  <h1>Cloudroom is already running on this Mac</h1>
+  <h1>Cloudroom is already running on this PC</h1>
   <p>${introText}</p>
   <div class="details">
       ${detailHtml}

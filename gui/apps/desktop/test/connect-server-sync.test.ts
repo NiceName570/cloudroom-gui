@@ -284,7 +284,7 @@ describe("createConnectServerSync without a local server", () => {
         new Response(
           JSON.stringify({
             servers: [
-              { handle: "me", name: "This Mac", live: true },
+              { handle: "me", name: "This PC", live: true },
               { handle: "other", name: "Other", live: true },
             ],
           }),

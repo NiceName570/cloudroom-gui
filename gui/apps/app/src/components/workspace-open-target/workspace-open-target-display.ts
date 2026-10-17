@@ -15,7 +15,7 @@ const WORKSPACE_OPEN_TARGET_FALLBACK_LABELS: Record<
   "devin-desktop": "Devin Desktop",
   emacs: "Emacs",
   "file-manager": "File Manager",
-  finder: "Finder",
+  finder: "File Explorer",
   ghostty: "Ghostty",
   goland: "GoLand",
   "intellij-idea": "IntelliJ IDEA",

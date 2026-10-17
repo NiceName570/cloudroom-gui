@@ -9,7 +9,7 @@ Cloudroom Connect opens Cloudroom from your phone or another computer, at a priv
 
 ## Setup and commands
 
-Connect registers this Mac by itself once you are signed in to Cloudroom. Get a phone code in Settings → Cloudroom Connect, or run `room-cli connect phone-code`. Phones stay signed in until `room-cli connect sign-out-phones` or Sign out all phones. Disable the plugin to stop remote access.
+Connect registers this PC by itself once you are signed in to Cloudroom. Get a phone code in Settings → Cloudroom Connect, or run `room-cli connect phone-code`. Phones stay signed in until `room-cli connect sign-out-phones` or Sign out all phones. Disable the plugin to stop remote access.
 
 Agents use `room-cli connect expose <port>` to share previews. Inspect with `room-cli connect status` and `room-cli connect shares`; stop a share with `room-cli connect unexpose <port>`.
 
