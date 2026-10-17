@@ -12,6 +12,8 @@ The upstream desktop releases support macOS and Linux. This fork makes Windows a
 
 The aim is a complete coding workspace: give an agent a task, watch its progress, inspect the files and Git changes, and keep a terminal beside the work. Your existing agent subscriptions and logins stay with their providers.
 
+**Free models with Thoth:** Cloudroom runs [Hermes Agent](https://hermes-agent.nousresearch.com)-based agents through ACP, so [Thoth](https://github.com/NiceName570/thoth-), a Hermes fork with an API Keys page and free-model rotation, can serve as the agent here without any Cloudroom code changes. Cloudroom's Hermes Agent connection is verified with the upstream Hermes build; running Thoth itself is not yet verified.
+
 **Release status:** Windows development preview. Installation, desktop rendering, PowerShell execution, and the CLI have been verified. Full agent workflows and the remaining Windows integrations are being validated against the [completion checklist](WINDOWS-ROADMAP.md). This README separates working evidence from the release target.
 
 ## What you can do
