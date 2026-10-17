@@ -415,20 +415,20 @@ describe("core environment orchestration", () => {
       expect(fixture.row().claimPath).toBeNull();
     }));
 
-  it("finalizes a workspace path already claimed by the same launch", async () =>
+  it.each(["/tmp/project", "C:\\Users\\developer\\Windows project", "\\\\server\\share\\project"])("finalizes a workspace path already claimed by the same launch: %s", async (workspacePath) =>
     withTestHarness(async (harness) => {
       const fixture = setup(harness, {
         create: async (context) => {
-          expect(await context.experimental_claimPath("/tmp/project")).toBe(
+          expect(await context.experimental_claimPath(workspacePath)).toBe(
             true,
           );
           context.report.log("Checkout prepared");
-          return { status: "created", path: "/tmp/project", ownsPath: false };
+          return { status: "created", path: workspacePath, ownsPath: false };
         },
       });
       fixture.ask();
       await fixture.settled();
-      expect(fixture.row().path).toBe("/tmp/project");
+      expect(fixture.row().path).toBe(workspacePath);
       expect(["provisioning", "ready"]).toContain(fixture.row().status);
     }));
 

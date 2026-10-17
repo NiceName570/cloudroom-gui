@@ -9,7 +9,7 @@ import {
   getThread,
   updateThread,
 } from "@cloudroom/db";
-import { turnScope } from "@cloudroom/domain";
+import { isAbsoluteProjectPath, normalizeProjectPathInput, turnScope } from "@cloudroom/domain";
 import type { DynamicTool, Thread, ToolCallResponse } from "@cloudroom/domain";
 import type { AppDeps } from "../../types.js";
 import { runLiveHostCommand } from "../hosts/live-command.js";
@@ -87,18 +87,14 @@ function toolCallSuccess(text: string): ToolCallResponse {
 }
 
 function normalizeDirectoryPath(path: string): string {
-  const trimmed = path.trim();
-  if (trimmed === "/") {
-    return trimmed;
-  }
-  return trimmed.replace(/\/+$/u, "");
+  return normalizeProjectPathInput(path);
 }
 
 function validateDirectoryPath(path: string): string | null {
-  if (!path.startsWith("/")) {
+  if (!isAbsoluteProjectPath(path)) {
     return "Path must be an absolute path on the current host.";
   }
-  if (path === "/") {
+  if (path === "/" || /^[A-Za-z]:[\\/]*$/u.test(path)) {
     return "Path must name a project directory, not the filesystem root.";
   }
   if (path.includes("\0")) {

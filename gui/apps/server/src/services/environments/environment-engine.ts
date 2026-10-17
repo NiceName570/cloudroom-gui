@@ -40,6 +40,8 @@ import {
 } from "@cloudroom/db";
 import {
   jsonValueSchema,
+  isAbsoluteProjectPath,
+  normalizeProjectPathInput,
   type Environment,
   type EnvironmentMachineSelection,
   type Host,
@@ -385,14 +387,14 @@ async function runCreate(
               const path = z
                 .string()
                 .min(1)
-                .startsWith("/")
+                .refine(isAbsoluteProjectPath, "Workspace path must be absolute")
                 .refine((path) => !path.includes("\0"))
                 .parse(value);
               if (signal.aborted) return false;
               return claimEnvironmentPath(
                 deps.db,
                 provisioning,
-                path.replace(/\/+$/u, "") || "/",
+                normalizeProjectPathInput(path),
               );
             },
             previous:
